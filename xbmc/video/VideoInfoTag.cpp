@@ -88,6 +88,7 @@ void CVideoInfoTag::Reset()
   m_parentPathID = -1;
   m_resumePoint.Reset();
   m_resumePoint.type = CBookmark::RESUME;
+  m_dvdPlayRange.clear();
   m_iIdShow = -1;
   m_iIdSeason = -1;
   m_strShowPath.clear();
@@ -245,6 +246,11 @@ bool CVideoInfoTag::Save(TiXmlNode *node, const CStdString &tag, bool savePathIn
   XMLUtils::SetFloat(&resume, "total", (float)m_resumePoint.totalTimeInSeconds);
   movie->InsertEndChild(resume);
 
+  if (tag == "movie" || tag == "episodedetails" || tag == "musicvideo")
+  {
+	XMLUtils::SetString(movie, "dvdplayrange", m_dvdPlayRange);
+  }
+
   XMLUtils::SetString(movie, "dateadded", m_dateAdded.GetAsDBDateTime());
 
   if (additionalNode)
@@ -330,6 +336,7 @@ void CVideoInfoTag::Archive(CArchive& ar)
     ar << m_parentPathID;
     ar << m_resumePoint.timeInSeconds;
     ar << m_resumePoint.totalTimeInSeconds;
+	ar << m_dvdPlayRange;
     ar << m_iIdShow;
     ar << m_strShowPath;
     ar << m_dateAdded.GetAsDBDateTime();
@@ -408,6 +415,7 @@ void CVideoInfoTag::Archive(CArchive& ar)
     ar >> m_parentPathID;
     ar >> m_resumePoint.timeInSeconds;
     ar >> m_resumePoint.totalTimeInSeconds;
+	ar >> m_dvdPlayRange;
     ar >> m_iIdShow;
     ar >> m_strShowPath;
 
@@ -478,6 +486,7 @@ void CVideoInfoTag::Serialize(CVariant& value) const
   resume["position"] = (float)m_resumePoint.timeInSeconds;
   resume["total"] = (float)m_resumePoint.totalTimeInSeconds;
   value["resume"] = resume;
+  value["dvdplayrange"] = m_dvdPlayRange;
   value["tvshowid"] = m_iIdShow;
   value["tvshowpath"] = m_strShowPath;
   value["dateadded"] = m_dateAdded.IsValid() ? m_dateAdded.GetAsDBDateTime() : StringUtils::EmptyString;
@@ -768,6 +777,9 @@ void CVideoInfoTag::ParseNative(const TiXmlElement* movie, bool prioritise)
     XMLUtils::GetDouble(resume, "position", m_resumePoint.timeInSeconds);
     XMLUtils::GetDouble(resume, "total", m_resumePoint.totalTimeInSeconds);
   }
+
+  // dvd player range, start and end title/chapter
+  XMLUtils::GetString(movie, "dvdplayrange", m_dvdPlayRange);
 
   // dateAdded
   CStdString dateAdded;

@@ -256,6 +256,12 @@ public:
    */
   virtual bool SeekTime(int time, bool backwords = false, double* startpts = NULL) = 0;
 
+
+  /*
+   * Seek to a specified title and chapter.
+   */
+  virtual bool SeekTitleChapter(int title, int chapter, double* startpts = NULL) { return false; }
+
   /*
    * Seek to a specified chapter.
    * startpts can be updated to the point where display should start
@@ -271,6 +277,11 @@ public:
    * Get current chapter
    */
   virtual int GetChapter() { return 0; }
+
+  /*
+   * Get current chapter
+   */
+  virtual int GetTitle() { return 0; }
 
   /*
    * Get the name of the current chapter

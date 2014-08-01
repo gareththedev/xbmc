@@ -1196,6 +1196,24 @@ int CDVDDemuxFFmpeg::GetChapter()
   return 0;
 }
 
+int CDVDDemuxFFmpeg::GetTitle()
+{
+  CDVDInputStream::IChapter* ich = dynamic_cast<CDVDInputStream::IChapter*>(m_pInput);
+  if(ich)
+	return ich->GetTitle();
+
+  return 0;
+}
+
+int CDVDDemuxFFmpeg::GetTitleCount()
+{
+  CDVDInputStream::IChapter* ich = dynamic_cast<CDVDInputStream::IChapter*>(m_pInput);
+  if(ich)
+	return ich->GetTitleCount();
+
+  return 0;
+}
+
 void CDVDDemuxFFmpeg::GetChapterName(std::string& strChapterName)
 {
   CDVDInputStream::IChapter* ich = dynamic_cast<CDVDInputStream::IChapter*>(m_pInput);
@@ -1212,6 +1230,35 @@ void CDVDDemuxFFmpeg::GetChapterName(std::string& strChapterName)
     if (titleTag)
       strChapterName = titleTag->value;
   }
+}
+
+//Gareth
+bool CDVDDemuxFFmpeg::SeekTitleChapter(int title, int chapter, double* startpts)
+{
+  if(title < 1)
+    title = 1;
+  
+  if(chapter < 1)
+    chapter = 1;
+  
+  CLog::Log(LOGDEBUG, "%s - title %d chapter %d", __FUNCTION__, title, chapter);
+
+  CDVDInputStream::IChapter* ich = dynamic_cast<CDVDInputStream::IChapter*>(m_pInput);
+
+  if(ich)
+  {
+    CLog::Log(LOGDEBUG, "%s - title and chapter seeking using input stream", __FUNCTION__);
+    if(!ich->SeekTitleChapter(title, chapter))
+      return false;
+	
+    if(startpts)
+      *startpts = DVD_NOPTS_VALUE;
+
+    Flush();
+    return true;
+  }
+  
+  return false;
 }
 
 bool CDVDDemuxFFmpeg::SeekChapter(int chapter, double* startpts)

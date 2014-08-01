@@ -3889,6 +3889,11 @@ bool CApplication::PlayStack(const CFileItem& item, bool bRestart)
       selectedFile = movieList.Size();
     }
 
+	if (item.HasDvdPlayRange())
+	{
+		movieList[selectedFile - 1]->SetProperty("DvdPlayRange", item.GetDvdPlayRange());
+	}
+
     // set startoffset in movieitem, track stack item for updating purposes, and finally play disc part
     movieList[selectedFile - 1]->m_lStartOffset = startoffset > 0 ? STARTOFFSET_RESUME : 0;
     movieList[selectedFile - 1]->SetProperty("stackFileItemToUpdate", true);
@@ -4088,6 +4093,37 @@ bool CApplication::PlayFile(const CFileItem& item, bool bRestart)
     if(item.GetProperty("StartPercent").isString())
       fallback = (double)atof(item.GetProperty("StartPercent").asString().c_str());
     options.startpercent = item.GetProperty("StartPercent").asDouble(fallback);
+  }
+
+  // set the dvd title and chapter play range
+  if (item.HasDvdPlayRange() && (item.IsDVD() || item.IsDVDFile() || item.IsDVDImage() || item.IsBDFile()))
+  {
+	  CStdString m_dvdPlayRange = item.GetDvdPlayRange();
+	  CStdStringArray startstoparray = StringUtils::SplitString(m_dvdPlayRange, "-", 2);
+
+	  for (int index = 0; index < startstoparray.size(); index++)
+	  {
+		  CStdString temp = startstoparray[index];
+
+		  int atChar = temp.Find('@');
+		  int midChar = temp.Find(',');
+
+		  if ((atChar > -1) && (midChar > -1) && midChar > atChar)
+		  {
+			  int dvdTitle = atoi(temp.Mid(atChar + 1, midChar - (atChar + 1)));
+			  int dvdChapter = atoi(temp.Mid(midChar + 1, temp.length() - (midChar + 1)));
+
+			  if (index == 0)
+			  {
+				  options.dvdstart = (dvdTitle << 16) + dvdChapter;
+			  }
+			  else if (index == 1)
+			  {
+				  options.dvdstop = (dvdTitle << 16) + dvdChapter;
+				  break;
+			  }
+		  }
+	  }
   }
 
   PLAYERCOREID eNewCore = EPC_NONE;

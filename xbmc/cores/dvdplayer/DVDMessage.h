@@ -65,6 +65,7 @@ public:
     PLAYER_SET_RECORD,              // set record state
     PLAYER_SEEK,                    //
     PLAYER_SEEK_CHAPTER,            //
+	PLAYER_SEEK_TITLE_CHAPTER,      //
     PLAYER_SETSPEED,                // set the playback speed
 
     PLAYER_CHANNEL_NEXT,            // switches to next playback channel
@@ -242,6 +243,24 @@ private:
   bool m_accurate;
   bool m_restore; // whether to restore any EDL cut time
   bool m_trickplay;
+};
+
+class CDVDMsgPlayerSeekTitleChapter : public CDVDMsg
+{
+  public:
+    CDVDMsgPlayerSeekTitleChapter(int iTitle, int iChapter)
+      : CDVDMsg(PLAYER_SEEK_TITLE_CHAPTER)
+      , m_iTitle(iTitle)
+      , m_iChapter(iChapter)
+    {}
+
+    int GetTitle() const { return m_iTitle; }
+    int GetChapter() const { return m_iChapter; }
+
+  private:
+
+    int m_iTitle;
+    int m_iChapter;
 };
 
 class CDVDMsgPlayerSeekChapter : public CDVDMsg

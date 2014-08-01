@@ -1015,6 +1015,21 @@ void CDVDPlayer::Process()
       m_EdlAutoSkipMarkers.seek_to_start   = true;
     }
   }
+
+  // start the video at the specified title and chapter if set
+  if (m_PlayerOptions.dvdstart > 0)
+  {
+	  int startTitle = (m_PlayerOptions.dvdstart & 0xFFFF0000) >> 16;
+	  int startChapter = m_PlayerOptions.dvdstart & 0x0000FFFF;
+
+      CLog::Log(LOGDEBUG, "%s - SEEKING TO TITLE %d CHAPTER %d", __FUNCTION__, startTitle, startChapter);
+	  if (startTitle > 0)
+	  {
+		  SeekChapterTitle(startTitle, startChapter);
+		  CLog::Log(LOGDEBUG, "%s - SEEKING TO TITLE DONE", __FUNCTION__);
+	  }
+  }
+
   if(starttime > 0)
   {
     double startpts = DVD_NOPTS_VALUE;
@@ -2032,6 +2047,25 @@ void CDVDPlayer::HandleMessages()
 
     try
     {
+      if (pMsg->IsType(CDVDMsg::PLAYER_SEEK_TITLE_CHAPTER) && m_messenger.GetPacketCount(CDVDMsg::PLAYER_SEEK_CHAPTER) == 0
+		                                                   && m_messenger.GetPacketCount(CDVDMsg::PLAYER_SEEK_TITLE_CHAPTER) == 0)
+	  {
+		g_infoManager.SetDisplayAfterSeek(100000);
+		SetCaching(CACHESTATE_FLUSH);
+
+		CDVDMsgPlayerSeekTitleChapter &msg(*((CDVDMsgPlayerSeekTitleChapter*)pMsg));
+		double start = DVD_NOPTS_VALUE;
+
+		// This should always be the case.
+		if(m_pDemuxer && m_pDemuxer->SeekTitleChapter(msg.GetTitle(), msg.GetChapter(), &start))
+		{
+			FlushBuffers(false, start, true);
+			m_callback.OnPlayBackSeekChapter(msg.GetChapter());
+		}
+
+		g_infoManager.SetDisplayAfterSeek();
+	  }
+	  else
       if (pMsg->IsType(CDVDMsg::PLAYER_SEEK) && m_messenger.GetPacketCount(CDVDMsg::PLAYER_SEEK)         == 0
                                              && m_messenger.GetPacketCount(CDVDMsg::PLAYER_SEEK_CHAPTER) == 0)
       {
@@ -3248,6 +3282,31 @@ void CDVDPlayer::FlushBuffers(bool queued, double pts, bool accurate)
   }
 }
 
+bool CDVDPlayer::DvdPlayRangeExpired()
+{
+	if(m_pDemuxer)
+	{
+		if (m_PlayerOptions.dvdstop > 0)
+		{
+			int stopTitle = (m_PlayerOptions.dvdstop & 0xFFFF0000) >> 16;
+			int stopChapter = m_PlayerOptions.dvdstop & 0x0000FFFF;
+
+			// does the last known title and chapter match the stop title and chapter
+			if (m_StateInput.title == stopTitle && m_StateInput.chapter == stopChapter)
+			{
+				// has the player moved on to the next title or chapter
+				if ((m_pDemuxer->GetTitle() != stopTitle) || (m_pDemuxer->GetChapter() != stopChapter))
+				{
+					// need to stop playback now
+					return true;
+				}
+			}
+		}
+    }
+
+	return false;
+}
+
 // since we call ffmpeg functions to decode, this is being called in the same thread as ::Process() is
 int CDVDPlayer::OnDVDNavResult(void* pData, int iMessage)
 {
@@ -3404,7 +3463,7 @@ int CDVDPlayer::OnDVDNavResult(void* pData, int iMessage)
 
         if( m_dvdPlayerVideo.IsInited() )
           m_dvdPlayerVideo.SendMessage(new CDVDMsg(CDVDMsg::VIDEO_NOSKIP));
-      }
+	  }
       break;
     case DVDNAV_NAV_PACKET:
       {
@@ -3770,6 +3829,13 @@ void CDVDPlayer::GetChapterName(CStdString& strChapterName)
   strChapterName = m_State.chapter_name;
 }
 
+int CDVDPlayer::SeekChapterTitle(int iTitle, int iChapter)
+{
+  m_messenger.Put(new CDVDMsgPlayerSeekTitleChapter(iTitle, iChapter));
+  SynchronizeDemuxer(100);
+  return 0;
+}
+
 int CDVDPlayer::SeekChapter(int iChapter)
 {
   if (GetChapterCount() > 0)
@@ -3915,6 +3981,12 @@ void CDVDPlayer::UpdatePlayState(double timeout)
 
   if(m_pDemuxer)
   {
+ 	if(DvdPlayRangeExpired())
+	{
+		m_bAbortRequest = true;
+	}
+
+	state.title         = m_pDemuxer->GetTitle();
     state.chapter       = m_pDemuxer->GetChapter();
     state.chapter_count = m_pDemuxer->GetChapterCount();
     m_pDemuxer->GetChapterName(state.chapter_name);

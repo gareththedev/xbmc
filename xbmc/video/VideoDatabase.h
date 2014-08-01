@@ -67,7 +67,7 @@ namespace VIDEO
 
 // these defines are based on how many columns we have and which column certain data is going to be in
 // when we do GetDetailsForMovie()
-#define VIDEODB_MAX_COLUMNS 24
+#define VIDEODB_MAX_COLUMNS 25
 #define VIDEODB_DETAILS_FILEID			1
 
 #define VIDEODB_DETAILS_MOVIE_SET_ID			VIDEODB_MAX_COLUMNS + 2
@@ -155,6 +155,7 @@ typedef enum // this enum MUST match the offset struct further down!! and make s
   VIDEODB_ID_COUNTRY = 21,
   VIDEODB_ID_BASEPATH = 22,
   VIDEODB_ID_PARENTPATHID = 23,
+  VIDEODB_ID_DVDPLAYRANGE = 24,
   VIDEODB_ID_MAX
 } VIDEODB_IDS;
 
@@ -187,7 +188,8 @@ const struct SDbTableOffsets
   { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_fanart.m_xml) },
   { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_country) },
   { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) }
+  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) },
+  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_dvdPlayRange) }
 };
 
 typedef enum // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
@@ -260,6 +262,7 @@ typedef enum // this enum MUST match the offset struct further down!! and make s
   VIDEODB_ID_EPISODE_BASEPATH = 18,
   VIDEODB_ID_EPISODE_PARENTPATHID = 19,
   VIDEODB_ID_EPISODE_UNIQUEID = 20,
+  VIDEODB_ID_EPISODE_DVDPLAYRANGE = 21,
   VIDEODB_ID_EPISODE_MAX
 } VIDEODB_EPISODE_IDS;
 
@@ -285,7 +288,8 @@ const struct SDbTableOffsets DbEpisodeOffsets[] =
   { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iBookmarkId) },
   { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
   { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) },
-  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strUniqueId) }
+  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_strUniqueId) },
+  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_dvdPlayRange) }
 };
 
 typedef enum // this enum MUST match the offset struct further down!! and make sure to keep min and max at -1 and sizeof(offsets)
@@ -306,6 +310,7 @@ typedef enum // this enum MUST match the offset struct further down!! and make s
   VIDEODB_ID_MUSICVIDEO_TRACK = 12,
   VIDEODB_ID_MUSICVIDEO_BASEPATH = 13,
   VIDEODB_ID_MUSICVIDEO_PARENTPATHID = 14,
+  VIDEODB_ID_MUSICVIDEO_DVDPLAYRANGE = 15,
   VIDEODB_ID_MUSICVIDEO_MAX
 } VIDEODB_MUSICVIDEO_IDS;
 
@@ -325,7 +330,8 @@ const struct SDbTableOffsets DbMusicVideoOffsets[] =
   { VIDEODB_TYPE_STRINGARRAY, my_offsetof(CVideoInfoTag,m_genre) },
   { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_iTrack) },
   { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_basePath) },
-  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) }
+  { VIDEODB_TYPE_INT, my_offsetof(CVideoInfoTag,m_parentPathID) },
+  { VIDEODB_TYPE_STRING, my_offsetof(CVideoInfoTag,m_dvdPlayRange) }
 };
 
 #define COMPARE_PERCENTAGE     0.90f // 90%

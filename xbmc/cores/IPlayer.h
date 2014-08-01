@@ -46,6 +46,8 @@ public:
     identify = false;
     fullscreen = false;
     video_only = false;
+	dvdstart = 0;
+	dvdstop = 0;
   }
   double  starttime; /* start time in seconds */
   double  startpercent; /* start time in percent */  
@@ -53,6 +55,8 @@ public:
   CStdString state;  /* potential playerstate to restore to */
   bool    fullscreen; /* player is allowed to switch to fullscreen */
   bool    video_only; /* player is not allowed to play audio streams, video streams only */
+  int     dvdstart; /* for dvd media, the number of the start title and chapter*/
+  int     dvdstop; /* for dvd media, the number of the stop title and chapter */
 };
 
 class CFileItem;

@@ -2851,6 +2851,41 @@ CStdString CFileItem::GetMovieName(bool bUseFolderNames /* = false */) const
   return strMovieName;
 }
 
+bool CFileItem::HasDvdPlayRange() const
+{
+  if (m_videoInfoTag && !m_videoInfoTag->m_dvdPlayRange.empty())
+  {
+	  return true;
+  }
+
+  if (HasProperty("DvdPlayRange"))
+  {
+	  return true;
+  }
+
+  return false;
+}
+
+CStdString CFileItem::GetDvdPlayRange() const
+{
+  if (m_videoInfoTag && !m_videoInfoTag->m_dvdPlayRange.empty())
+  {
+	  return m_videoInfoTag->m_dvdPlayRange;
+  }
+
+  if (HasProperty("DvdPlayRange"))
+  {
+	  std::string result = GetProperty("DvdPlayRange").asString();
+
+	  if (!result.empty())
+	  {
+		  return result;
+	  }
+  }
+
+  return "";
+}
+
 CStdString CFileItem::GetBaseMoviePath(bool bUseFolderNames) const
 {
   CStdString strMovieName = m_strPath;

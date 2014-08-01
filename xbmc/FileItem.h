@@ -316,6 +316,9 @@ public:
   // Gets the correct movie title
   CStdString GetMovieName(bool bUseFolderNames = false) const;
 
+  bool HasDvdPlayRange() const;
+  CStdString GetDvdPlayRange() const;
+
   /*! \brief Find the base movie path (i.e. the item the user expects us to use to lookup the movie)
    For folder items, with "use foldernames for lookups" it returns the folder.
    Regardless of settings, for VIDEO_TS/BDMV it returns the parent of the VIDEO_TS/BDMV folder (if present)

@@ -1121,6 +1121,37 @@ bool CDVDInputStreamNavigator::SeekTime(int iTimeInMsec)
   return true;
 }
 
+//CDVDMsgPlayerSeekTitleChapter
+bool CDVDInputStreamNavigator::SeekTitleChapter(int iTitle, int iChapter)
+{
+  CLog::Log(LOGDEBUG, "%s - Seeking title/chapter %d - %d", __FUNCTION__, iTitle, iChapter);
+  if (!m_dvdnav)
+    return false;
+
+  // cannot allow to return true in case of buttons (overlays) because otherwise back in DVDPlayer FlushBuffers will remove menu overlays
+  // therefore we just skip the request in case there are buttons and return false
+  if (IsInMenu() && GetTotalButtons() > 0)
+  {
+    CLog::Log(LOGDEBUG, "%s - Seeking chapter is not allowed in menu set with buttons", __FUNCTION__);
+    return false;
+  }
+
+  bool enabled = IsSubtitleStreamEnabled();
+  int audio    = GetActiveAudioStream();
+  int subtitle = GetActiveSubtitleStream();
+
+  if (m_dll.dvdnav_part_play(m_dvdnav, iTitle, iChapter) == DVDNAV_STATUS_ERR)
+  {
+    CLog::Log(LOGERROR, "dvdnav: dvdnav_part_play failed( %s )", m_dll.dvdnav_err_to_string(m_dvdnav));
+    return false;
+  }
+
+  SetActiveSubtitleStream(subtitle);
+  SetActiveAudioStream(audio);
+  EnableSubtitleStream(enabled);
+  return true;
+}
+
 bool CDVDInputStreamNavigator::SeekChapter(int iChapter)
 {
   if (!m_dvdnav)

@@ -144,6 +144,7 @@ public:
   CFanart m_fanart;
   CStreamDetails m_streamDetails;
   CBookmark m_resumePoint;
+  CStdString m_dvdPlayRange;
   CDateTime m_dateAdded;
   CStdString m_type;
   int m_duration; ///< duration in seconds

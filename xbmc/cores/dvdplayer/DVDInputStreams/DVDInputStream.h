@@ -93,6 +93,9 @@ public:
   {
     public:
     virtual ~IChapter() {};
+    virtual int  GetTitle() = 0;
+    virtual int  GetTitleCount() = 0;
+    virtual bool SeekTitleChapter(int iTitle, int iChapter) = 0;
     virtual int  GetChapter() = 0;
     virtual int  GetChapterCount() = 0;
     virtual void GetChapterName(std::string& name) = 0;

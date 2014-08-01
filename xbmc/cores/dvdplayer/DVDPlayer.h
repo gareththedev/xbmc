@@ -220,6 +220,7 @@ public:
   virtual int  GetChapterCount();
   virtual int  GetChapter();
   virtual void GetChapterName(CStdString& strChapterName);
+  virtual int  SeekChapterTitle(int iTitle, int iChapter);
   virtual int  SeekChapter(int iChapter);
 
   virtual void SeekTime(int64_t iTime);
@@ -330,6 +331,8 @@ protected:
   bool OpenDemuxStream();
   void OpenDefaultStreams(bool reset = true);
 
+  bool DvdPlayRangeExpired();
+
   void UpdateApplication(double timeout);
   void UpdatePlayState(double timeout);
   double m_UpdateApplication;
@@ -417,6 +420,7 @@ protected:
       time_src      = ETIMESOURCE_CLOCK;
       dts           = DVD_NOPTS_VALUE;
       player_state  = "";
+	  title         = 0;
       chapter       = 0;
       chapter_name  = "";
       chapter_count = 0;
@@ -443,6 +447,8 @@ protected:
     double dts;               // last known dts
 
     std::string player_state;  // full player state
+
+    int         title;        // current title
 
     int         chapter;      // current chapter
     std::string chapter_name; // name of current chapter

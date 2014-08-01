@@ -124,6 +124,10 @@ public:
   bool GetState(std::string &xmlstate);
   bool SetState(const std::string &xmlstate);
 
+  int GetTitle()      { return m_iTitle; }      // the current title
+  int GetTitleCount() { return m_iTitleCount; } // the number of titles
+  bool SeekTitleChapter(int iTitle, int iChapter);
+
   int GetChapter()      { return m_iPart; }      // the current part in the current title
   int GetChapterCount() { return m_iPartCount; } // the number of parts in the current title
   void GetChapterName(std::string& name) {};

@@ -88,6 +88,10 @@ public:
 
   void UserInput(bd_vk_key_e vk);
 
+  int GetTitle() { return 0; }
+  int GetTitleCount() { return 0; }
+  bool SeekTitleChapter(int iTitle, int iChapter) { return false; };
+
   int GetChapter();
   int GetChapterCount();
   void GetChapterName(std::string& name) {};

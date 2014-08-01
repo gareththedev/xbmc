@@ -416,6 +416,15 @@ bool CDVDInputStreamBluray::Open(const char* strFile, const std::string& content
       return false;
     }
 
+	//if (m_dll->bd_select_title(m_bd, 13) != 0)
+	//{
+	//	if (m_dll->bd_seek_chapter(m_bd, 1) != 0)
+	//	{
+	//      does not work - loading just stops!
+	//		return true;
+	//	}
+	//}
+
     if(m_dll->bd_select_playlist(m_bd, m_title->playlist) == 0 )
     {
       CLog::Log(LOGERROR, "CDVDInputStreamBluray::Open - failed to select title %d", m_title->idx);
