@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@
  */
 
 #include "threads/Thread.h"
+#include "IDVDPlayer.h"
 #include "DVDMessageQueue.h"
 #include "DVDDemuxers/DVDDemuxUtils.h"
 #include "DVDCodecs/Video/DVDVideoCodec.h"
@@ -31,13 +32,12 @@
 #include "cores/VideoRenderers/RenderManager.h"
 #endif
 
-enum CodecID;
 class CDemuxStreamVideo;
 class CDVDOverlayCodecCC;
 
 #define VIDEO_PICTURE_QUEUE_SIZE 1
 
-class CDVDPlayerVideo : public CThread
+class CDVDPlayerVideo : public CThread, public IDVDStreamPlayer
 {
 public:
   CDVDPlayerVideo( CDVDClock* pClock
@@ -61,12 +61,6 @@ public:
   bool IsInited() const                             { return m_messageQueue.IsInited(); }
   void SendMessage(CDVDMsg* pMsg, int priority = 0) { m_messageQueue.Put(pMsg, priority); }
 
-#ifdef HAS_VIDEO_PLAYBACK
-  void Update(bool bPauseDrawing)                   { g_renderManager.Update(bPauseDrawing); }
-#else
-  void Update(bool bPauseDrawing)                   { }
-#endif
-
   void EnableSubtitle(bool bEnable)                 { m_bRenderSubs = bEnable; }
   bool IsSubtitleEnabled()                          { return m_bRenderSubs; }
 
@@ -83,7 +77,7 @@ public:
   double GetSubtitleDelay()                                { return m_iSubtitleDelay; }
   void SetSubtitleDelay(double delay)                      { m_iSubtitleDelay = delay; }
 
-  bool IsStalled()                                  { return m_stalled; }
+  bool IsStalled() const                            { return m_stalled; }
   int GetNrOfDroppedFrames()                        { return m_iDroppedFrames; }
 
   bool InitializedOutputDevice();
@@ -94,6 +88,7 @@ public:
   double GetOutputDelay(); /* returns the expected delay, from that a packet is put in queue */
   std::string GetPlayerInfo();
   int GetVideoBitrate();
+  std::string GetStereoMode();
 
   void SetSpeed(int iSpeed);
 
@@ -128,6 +123,7 @@ protected:
   double m_iVideoDelay;
   double m_iSubtitleDelay;
   double m_FlipTimeStamp; // time stamp of last flippage. used to play at a forced framerate
+  double m_FlipTimePts;   // pts of the last flipped page
 
   int m_iLateFrames;
   int m_iDroppedFrames;
@@ -160,6 +156,7 @@ protected:
     unsigned int chroma_position;
     unsigned int color_primaries;
     unsigned int color_transfer;
+    unsigned int stereo_flags;
     double       framerate;
   } m_output; //holds currently configured output
 
@@ -171,17 +168,9 @@ protected:
   int m_iNrOfPicturesNotToSkip;
   int m_speed;
 
-  double m_droptime;
-  double m_dropbase;
-
   bool m_stalled;
   bool m_started;
   std::string m_codecname;
-
-  /* autosync decides on how much of clock we should use when deciding sleep time */
-  /* the value is the same as 63% timeconstant, ie that the step response of */
-  /* iSleepTime will be at 63% of iClockSleep after autosync frames */
-  unsigned int m_autosync;
 
   BitstreamStats m_videoStats;
 

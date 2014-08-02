@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ public:
   static void UpdateFrameTime(bool flip); ///< update the frame time.  Not threadsafe
   static unsigned int GetFrameTime(); ///< returns the frame time in MS.  Not threadsafe
   static CDateTime GetLocalTime(time_t time);
+  static void Close();
 
 private:
   static unsigned int frameTime;

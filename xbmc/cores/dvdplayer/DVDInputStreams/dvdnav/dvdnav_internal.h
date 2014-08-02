@@ -27,14 +27,13 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-//#include <unistd.h>
 #include <limits.h>
 #include <string.h>
 
-#ifdef WIN32
+#ifdef TARGET_WINDOWS
 
 /* pthread_mutex_* wrapper for win32 */
-#ifndef _LINUX
+#ifndef TARGET_POSIX
 #include <windows.h>
 #include <process.h>
 typedef CRITICAL_SECTION pthread_mutex_t;
@@ -42,7 +41,7 @@ typedef CRITICAL_SECTION pthread_mutex_t;
 #define pthread_mutex_lock(a)    EnterCriticalSection(a)
 #define pthread_mutex_unlock(a)  LeaveCriticalSection(a)
 #define pthread_mutex_destroy(a) DeleteCriticalSection(a)
-#endif // !_LINUX
+#endif // !TARGET_POSIX
 
 #ifndef HAVE_GETTIMEOFDAY
 /* replacement gettimeofday implementation */
@@ -58,16 +57,16 @@ static inline int _private_gettimeofday( struct timeval *tv, void *tz )
 #define gettimeofday(TV, TZ) _private_gettimeofday((TV), (TZ))
 #endif
 
-#ifndef _LINUX
+#ifndef TARGET_POSIX
 #include <io.h> /* read() */
 #define lseek64 _lseeki64
-#endif // !_LINUX
+#endif // !TARGET_POSIX
 
 #else
 
 #include <pthread.h>
 
-#endif /* WIN32 */
+#endif /* TARGET_WINDOWS */
 
 /* Uncomment for VM command tracing */
 /* #define TRACE */
@@ -93,6 +92,14 @@ static inline int _private_gettimeofday( struct timeval *tv, void *tz )
 #ifndef DVD_VIDEO_LB_LEN
 #define DVD_VIDEO_LB_LEN 2048
 #endif
+
+typedef enum {
+  DSI_ILVU_PRE   = 1 << 15, /* set during the last 3 VOBU preceeding an interleaved block. */
+  DSI_ILVU_BLOCK = 1 << 14, /* set for all VOBU in an interleaved block */
+  DSI_ILVU_FIRST = 1 << 13, /* set for the first VOBU for a given angle or scene within a ILVU, or the first VOBU in the preparation (PREU) sequence */
+  DSI_ILVU_LAST  = 1 << 12, /* set for the last VOBU for a given angle or scene within a ILVU, or the last VOBU in the preparation (PREU) sequence */
+  DSI_ILVU_MASK  = 0xf000
+} DSI_ILVU;
 
 typedef struct read_cache_s read_cache_t;
 
@@ -217,7 +224,7 @@ dvdnav_status_t dvdnav_set_state(dvdnav_t *self, dvd_state_t *save_state);
 #else
 #define printerrf(...) \
 	do { if (this) snprintf(this->err_str, MAX_ERR_LEN, __VA_ARGS__); } while (0)
-#endif /* WIN32 */
+#endif /* TARGET_WINDOWS */
 #endif
 #define printerr(str) \
 	do { if (this) strncpy(this->err_str, str, MAX_ERR_LEN - 1); } while (0)

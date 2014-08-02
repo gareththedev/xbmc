@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2011-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -22,12 +22,12 @@
 #include "system.h"
 #include "URL.h"
 #include "FileItem.h"
-#include "DllHDHomeRun.h"
 #include "HDHomeRunFile.h"
 #include "utils/TimeUtils.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
 #include "Util.h"
+#include "DllHDHomeRun.h"
 
 using namespace XFILE;
 using namespace std;
@@ -50,18 +50,15 @@ CHomeRunFile::~CHomeRunFile()
 
 bool CHomeRunFile::Exists(const CURL& url)
 {
-  CStdString path(url.GetFileName());
+  std::string path(url.GetFileName());
 
   /*
    * HDHomeRun URLs are of the form hdhomerun://1014F6D1/tuner0?channel=qam:108&program=10
    * The filename starts with "tuner" and has no extension. This check will cover off requests
    * for *.tbn, *.jpg, *.jpeg, *.edl etc. that do not exist.
    */
-  if(path.Left(5) == "tuner"
-  && URIUtils::GetExtension(path).IsEmpty())
-    return true;
-
-  return false;
+  return StringUtils::StartsWith(path, "tuner") &&
+        !URIUtils::HasExtension(path);
 }
 
 int64_t CHomeRunFile::Seek(int64_t iFilePosition, int iWhence)

@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -12,19 +12,20 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  Lesser General Public License for more details.
  *
- *  You should have received a copy of the GNU Lesser General Public
- *  License along with this library; if not, write to the Free Software
- *  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ *  You should have received a copy of the GNU General Public License
+ *  along with XBMC; see the file COPYING.  If not, see
+ *  <http://www.gnu.org/licenses/>.
  *
  */
 #include "system.h"
 #ifdef HAVE_LIBVA
 #include "windowing/WindowingFactory.h"
-#include "settings/Settings.h"
 #include "VAAPI.h"
 #include "DVDVideoCodec.h"
 #include <boost/scoped_array.hpp>
 #include <boost/weak_ptr.hpp>
+#include "utils/log.h"
+#include "threads/SingleLock.h"
 
 #define CHECK(a) \
 do { \
@@ -52,6 +53,16 @@ using namespace std;
 using namespace boost;
 using namespace VAAPI;
 
+// settings codecs mapping
+DVDCodecAvailableType g_vaapi_available[] = {
+  { AV_CODEC_ID_H263, "videoplayer.usevaapimpeg4" },
+  { AV_CODEC_ID_MPEG4, "videoplayer.usevaapimpeg4" },
+  { AV_CODEC_ID_WMV3, "videoplayer.usevaapivc1" },
+  { AV_CODEC_ID_VC1, "videoplayer.usevaapivc1" },
+  { AV_CODEC_ID_MPEG2VIDEO, "videoplayer.usevaapimpeg2" },
+};
+const size_t settings_count = sizeof(g_vaapi_available) / sizeof(DVDCodecAvailableType);
+
 static int compare_version(int major_l, int minor_l, int micro_l, int major_r, int minor_r, int micro_r)
 {
   if(major_l < major_r) return -1;
@@ -63,18 +74,18 @@ static int compare_version(int major_l, int minor_l, int micro_l, int major_r, i
   return 0;
 }
 
-static void RelBufferS(AVCodecContext *avctx, AVFrame *pic)
-{ ((CDecoder*)((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetHardware())->RelBuffer(avctx, pic); }
+static void RelBufferS(void *opaque, uint8_t *data)
+{ ((CDecoder*)((CDVDVideoCodecFFmpeg*)opaque)->GetHardware())->RelBuffer(data); }
 
-static int GetBufferS(AVCodecContext *avctx, AVFrame *pic) 
-{  return ((CDecoder*)((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetHardware())->GetBuffer(avctx, pic); }
+static int GetBufferS(AVCodecContext *avctx, AVFrame *pic, int flags)
+{  return ((CDecoder*)((CDVDVideoCodecFFmpeg*)avctx->opaque)->GetHardware())->GetBuffer(avctx, pic, flags); }
 
 static inline VASurfaceID GetSurfaceID(AVFrame *pic)
 { return (VASurfaceID)(uintptr_t)pic->data[3]; }
 
 static CDisplayPtr GetGlobalDisplay()
 {
-  static weak_ptr<CDisplay> display_global;
+  static boost::weak_ptr<CDisplay> display_global;
 
   CDisplayPtr display(display_global.lock());
   if(display)
@@ -106,6 +117,7 @@ static CDisplayPtr GetGlobalDisplay()
 
   bool deinterlace = true;
   int major, minor, micro;
+  bool support_4k = true;
   if(sscanf(vendor,  "Intel i965 driver - %d.%d.%d", &major, &minor, &micro) == 3)
   {
     /* older version will crash and burn */
@@ -114,9 +126,16 @@ static CDisplayPtr GetGlobalDisplay()
       CLog::Log(LOGDEBUG, "VAAPI - deinterlace not support on this intel driver version");
       deinterlace = false;
     }
+    // do the same check for 4K decoding: version < 1.2.0 (stable) and 1.0.21 (staging)
+    // cannot decode 4K and will crash the GPU
+    if((compare_version(major, minor, micro, 1, 2, 0) < 0) && (compare_version(major, minor, micro, 1, 0, 21) < 0))
+    {
+      support_4k = false;
+    }
   }
 
   display = CDisplayPtr(new CDisplay(disp, deinterlace));
+  display->support_4k(support_4k);
   display_global = display;
   return display;
 }
@@ -157,9 +176,9 @@ CDecoder::~CDecoder()
   free(m_hwaccel);
 }
 
-void CDecoder::RelBuffer(AVCodecContext *avctx, AVFrame *pic)
+void CDecoder::RelBuffer(uint8_t *data)
 {
-  VASurfaceID surface = GetSurfaceID(pic);
+  VASurfaceID surface = (VASurfaceID)(uintptr_t)data;
 
   for(std::list<CSurfacePtr>::iterator it = m_surfaces_used.begin(); it != m_surfaces_used.end(); ++it)
   {    
@@ -170,13 +189,9 @@ void CDecoder::RelBuffer(AVCodecContext *avctx, AVFrame *pic)
       break;
     }
   }
-  pic->data[0] = NULL;
-  pic->data[1] = NULL;
-  pic->data[2] = NULL;
-  pic->data[3] = NULL;
 }
 
-int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic)
+int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic, int flags)
 {
   VASurfaceID surface = GetSurfaceID(pic);
   CSurface*   wrapper = NULL;
@@ -226,16 +241,23 @@ int CDecoder::GetBuffer(AVCodecContext *avctx, AVFrame *pic)
     m_surfaces_free.erase(it);
   }
 
-  pic->type           = FF_BUFFER_TYPE_USER;
   pic->data[0]        = (uint8_t*)wrapper;
   pic->data[1]        = NULL;
   pic->data[2]        = NULL;
-  pic->data[3]        = (uint8_t*)surface;
+  pic->data[3]        = (uint8_t*)(uintptr_t)surface;
   pic->linesize[0]    = 0;
   pic->linesize[1]    = 0;
   pic->linesize[2]    = 0;
   pic->linesize[3]    = 0;
   pic->reordered_opaque= avctx->reordered_opaque;
+
+  AVBufferRef *buffer = av_buffer_create(pic->data[3], 0, RelBufferS, avctx->opaque, 0);
+  if (!buffer)
+  {
+    CLog::Log(LOGERROR, "VAAPI::%s - error creating buffer", __FUNCTION__);
+    return -1;
+  }
+  pic->buf[0] = buffer;
   return 0;
 }
 
@@ -261,6 +283,10 @@ void CDecoder::Close()
 
 bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int surfaces)
 {
+  // check if user wants to decode this format with VAAPI
+  if (CDVDVideoCodec::IsCodecDisabled(g_vaapi_available, settings_count, avctx->codec_id))
+    return false;
+
   VAEntrypoint entrypoint = VAEntrypointVLD;
   VAProfile    profile;
 
@@ -268,14 +294,14 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
 
   vector<VAProfile> accepted;
   switch (avctx->codec_id) {
-    case CODEC_ID_MPEG2VIDEO:
+    case AV_CODEC_ID_MPEG2VIDEO:
       accepted.push_back(VAProfileMPEG2Main);
       break;
-    case CODEC_ID_MPEG4:
-    case CODEC_ID_H263:
+    case AV_CODEC_ID_MPEG4:
+    case AV_CODEC_ID_H263:
       accepted.push_back(VAProfileMPEG4AdvancedSimple);
       break;
-    case CODEC_ID_H264:
+    case AV_CODEC_ID_H264:
     {
 #ifdef FF_PROFILE_H264_BASELINE
       if  (avctx->profile == FF_PROFILE_H264_BASELINE)
@@ -294,10 +320,10 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
       }
       break;
     }
-    case CODEC_ID_WMV3:
+    case AV_CODEC_ID_WMV3:
       accepted.push_back(VAProfileVC1Main);
       break;
-    case CODEC_ID_VC1:
+    case AV_CODEC_ID_VC1:
       accepted.push_back(VAProfileVC1Advanced);
       break;
     default:
@@ -307,6 +333,12 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
   m_display = GetGlobalDisplay();
   if(!m_display)
     return false;
+
+  if(!m_display->support_4k() && (avctx->width > 1920 || avctx->height > 1088))
+  {
+    CLog::Log(LOGDEBUG, "VAAPI - frame size (%dx%d) too large - disallowing", avctx->width, avctx->height);
+    return false;
+  }
 
   int num_display_attrs = 0;
   scoped_array<VADisplayAttribute> display_attrs(new VADisplayAttribute[vaMaxNumDisplayAttributes(m_display->get())]);
@@ -357,16 +389,14 @@ bool CDecoder::Open(AVCodecContext *avctx, enum PixelFormat fmt, unsigned int su
   CHECK(vaCreateConfig(m_display->get(), profile, entrypoint, &attrib, 1, &m_hwaccel->config_id))
   m_config = m_hwaccel->config_id;
 
+  m_renderbuffers_count = surfaces;
   if (!EnsureContext(avctx))
     return false;
 
   m_hwaccel->display     = m_display->get();
 
   avctx->hwaccel_context = m_hwaccel;
-  avctx->thread_count    = 1;
-  avctx->get_buffer      = GetBufferS;
-  avctx->reget_buffer    = GetBufferS;
-  avctx->release_buffer  = RelBufferS;
+  avctx->get_buffer2     = GetBufferS;
   avctx->draw_horiz_band = NULL;
   avctx->slice_flags     = SLICE_FLAG_CODED_ORDER|SLICE_FLAG_ALLOW_FIELD;
   return true;
@@ -383,17 +413,23 @@ bool CDecoder::EnsureContext(AVCodecContext *avctx)
   m_refs = avctx->refs;
   if(m_refs == 0)
   {
-    if(avctx->codec_id == CODEC_ID_H264)
+    if(avctx->codec_id == AV_CODEC_ID_H264)
       m_refs = 16;
     else
       m_refs = 2;
   }
-  return EnsureSurfaces(avctx, m_refs + 3);
+  return EnsureSurfaces(avctx, m_refs + m_renderbuffers_count + 1);
 }
 
 bool CDecoder::EnsureSurfaces(AVCodecContext *avctx, unsigned n_surfaces_count)
 {
   CLog::Log(LOGDEBUG, "VAAPI - making sure %d surfaces are allocated for given %d references", n_surfaces_count, avctx->refs);
+
+  if(n_surfaces_count > m_surfaces_max)
+  {
+    CLog::Log(LOGERROR, "VAAPI - Failed to ensure surfaces! Requested %d surfaces. Maximum possible count is %d!", n_surfaces_count, m_surfaces_max);
+    return false;
+  }
 
   if(n_surfaces_count <= m_surfaces_count)
     return true;
@@ -509,6 +545,11 @@ int CDecoder::Check(AVCodecContext* avctx)
 
   m_holder.surface.reset();
   return 0;
+}
+
+unsigned CDecoder::GetAllowedReferences()
+{
+  return m_renderbuffers_count;
 }
 
 #endif

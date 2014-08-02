@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,8 +27,9 @@
 #include "DVDDemuxers/DVDDemuxUtils.h"
 #include "DVDStreamInfo.h"
 #include "utils/BitstreamStats.h"
+#include "IDVDPlayer.h"
 
-#include "cores/AudioEngine/AEAudioFormat.h"
+#include "cores/AudioEngine/Utils/AEAudioFormat.h"
 
 #include <list>
 #include <queue>
@@ -44,23 +45,6 @@ class CDVDAudioCodec;
 #define DECODE_FLAG_ABORT   8
 #define DECODE_FLAG_TIMEOUT 16
 
-typedef struct stDVDAudioFrame
-{
-  BYTE* data;
-  double pts;
-  double duration;
-  unsigned int size;
-
-  int               channel_count;
-  int               encoded_channel_count;
-  CAEChannelInfo    channel_layout;
-  enum AEDataFormat data_format;
-  int               bits_per_sample;
-  int               sample_rate;
-  int               encoded_sample_rate;
-  bool              passthrough;
-} DVDAudioFrame;
-
 class CPTSInputQueue
 {
 private:
@@ -73,7 +57,52 @@ public:
   void   Flush();
 };
 
-class CDVDPlayerAudio : public CThread
+class CDVDErrorAverage
+{
+public:
+  CDVDErrorAverage()
+  {
+    Flush();
+  }
+  void    Add(double error)
+  {
+    m_buffer += error;
+    m_count++;
+  }
+
+  void    Flush()
+  {
+    m_buffer = 0.0f;
+    m_count  = 0;
+    m_timer.Set(2000);
+  }
+
+  double  Get()
+  {
+    if(m_count)
+      return m_buffer / m_count;
+    else
+      return 0.0;
+  }
+
+  bool    Get(double& error)
+  {
+    if(m_timer.IsTimePast())
+    {
+      error = Get();
+      Flush();
+      return true;
+    }
+    else
+      return false;
+  }
+
+  double               m_buffer; //place to store average errors
+  int                  m_count;  //number of errors stored
+  XbmcThreads::EndTime m_timer;
+};
+
+class CDVDPlayerAudio : public CThread, public IDVDStreamPlayer
 {
 public:
   CDVDPlayerAudio(CDVDClock* pClock, CDVDMessageQueue& parent);
@@ -114,9 +143,9 @@ public:
   CPTSOutputQueue m_ptsOutput;
   CPTSInputQueue  m_ptsInput;
 
-  double GetCurrentPts()                            { return m_dvdAudio.GetPlayingPts(); }
+  double GetCurrentPts()                            { CSingleLock lock(m_info_section); return m_info.pts; }
 
-  bool IsStalled()                                  { return m_stalled;  }
+  bool IsStalled() const                            { return m_stalled;  }
   bool IsPassthrough() const;
 protected:
 
@@ -124,7 +153,9 @@ protected:
   virtual void OnExit();
   virtual void Process();
 
-  int DecodeFrame(DVDAudioFrame &audioframe, bool bDropPacket);
+  int DecodeFrame(DVDAudioFrame &audioframe);
+
+  void UpdatePlayerInfo();
 
   CDVDMessageQueue m_messageQueue;
   CDVDMessageQueue& m_messageParent;
@@ -146,7 +177,7 @@ protected:
     }
 
     CDVDMsgDemuxerPacket*  msg;
-    BYTE*                  data;
+    uint8_t*               data;
     int                    size;
     double                 dts;
 
@@ -177,10 +208,8 @@ protected:
   BitstreamStats m_audioStats;
 
   int     m_speed;
-  double  m_droptime;
   bool    m_stalled;
   bool    m_started;
-  double  m_duration; // last packets duration
   bool    m_silence;
 
   bool OutputPacket(DVDAudioFrame &audioframe);
@@ -192,19 +221,29 @@ protected:
 
   double m_error;    //last average error
 
-  int64_t m_errortime; //timestamp of last time we measured
-  int64_t m_freq;
-
   void   SetSyncType(bool passthrough);
   void   HandleSyncError(double duration);
-  double m_errorbuff; //place to store average errors
-  int    m_errorcount;//number of errors stored
+  CDVDErrorAverage m_errors;
   bool   m_syncclock;
 
   double m_integral; //integral correction for resampler
-  int    m_skipdupcount; //counter for skip/duplicate synctype
   bool   m_prevskipped;
   double m_maxspeedadjust;
   double m_resampleratio; //resample ratio when using SYNC_RESAMPLE, used for the codec info
+
+  struct SInfo
+  {
+    SInfo()
+    : pts(DVD_NOPTS_VALUE)
+    , passthrough(false)
+    {}
+
+    std::string      info;
+    double           pts;
+    bool             passthrough;
+  };
+
+  CCriticalSection m_info_section;
+  SInfo            m_info;
 };
 

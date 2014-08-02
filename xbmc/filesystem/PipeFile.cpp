@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2011-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ void CPipeFile::SetLength(int64_t len)
 
 bool CPipeFile::Open(const CURL& url)
 {
-  CStdString name = url.Get();
+  std::string name = url.Get();
   m_pipe = PipesManager::GetInstance().OpenPipe(name);
   if (m_pipe)
     m_pipe->AddListener(this);
@@ -61,7 +61,7 @@ bool CPipeFile::Open(const CURL& url)
 
 bool CPipeFile::Exists(const CURL& url)
 {
-  CStdString name = url.Get();
+  std::string name = url.Get();
   return PipesManager::GetInstance().Exists(name);
 }
 
@@ -143,7 +143,7 @@ void CPipeFile::Flush()
 
 bool CPipeFile::OpenForWrite(const CURL& url, bool bOverWrite)
 {
-  CStdString name = url.Get();
+  std::string name = url.Get();
 
   m_pipe = PipesManager::GetInstance().CreatePipe(name);
   if (m_pipe)
@@ -166,10 +166,10 @@ int CPipeFile::IoControl(int request, void* param)
   return -1;
 }
 
-CStdString CPipeFile::GetName() const
+std::string CPipeFile::GetName() const
 {
   if (!m_pipe)
-    return StringUtils::EmptyString;
+    return "";
   return m_pipe->GetName();
 }
 

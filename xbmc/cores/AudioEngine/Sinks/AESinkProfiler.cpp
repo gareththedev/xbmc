@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,15 +20,13 @@
 
 #include "system.h"
 
-#include "AESinkProfiler.h"
 #include <stdint.h>
 #include <limits.h>
 
-#include "Utils/AEUtil.h"
-#include "utils/StdString.h"
+#include "cores/AudioEngine/Sinks/AESinkProfiler.h"
+#include "cores/AudioEngine/Utils/AEUtil.h"
 #include "utils/log.h"
 #include "utils/TimeUtils.h"
-#include "settings/GUISettings.h"
 
 CAESinkProfiler::CAESinkProfiler()
 {
@@ -56,23 +54,12 @@ void CAESinkProfiler::Deinitialize()
 {
 }
 
-bool CAESinkProfiler::IsCompatible(const AEAudioFormat format, const std::string &device)
+void CAESinkProfiler::GetDelay(AEDelayStatus& status)
 {
-  if (AE_IS_RAW(format.m_dataFormat))
-    return false;
-
-  if (format.m_dataFormat != AE_FMT_FLOAT)
-    return false;
-
-  return true;
+  status.SetDelay(0);
 }
 
-double CAESinkProfiler::GetDelay()
-{
-  return 0.0f;
-}
-
-unsigned int CAESinkProfiler::AddPackets(uint8_t *data, unsigned int frames, bool hasAudio)
+unsigned int CAESinkProfiler::AddPackets(uint8_t **data, unsigned int frames, unsigned int offset)
 {
   int64_t ts = CurrentHostCounter();
   CLog::Log(LOGDEBUG, "CAESinkProfiler::AddPackets - latency %f ms", (float)(ts - m_ts) / 1000000.0f);

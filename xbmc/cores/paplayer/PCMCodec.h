@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2011-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,11 +26,11 @@ class PCMCodec : public CachingCodec
 public:
   PCMCodec(void);
   virtual ~PCMCodec(void);
-  virtual bool Init(const CStdString &strFile, unsigned int filecache);
+  virtual bool Init(const std::string &strFile, unsigned int filecache);
   virtual void DeInit();
   virtual int64_t Seek(int64_t iSeekTime);
   virtual int ReadPCM(BYTE *pBuffer, int size, int *actualsize);
   virtual bool CanInit();
-  virtual void SetMimeParams(const CStdString& strMimeParams);
+  virtual void SetMimeParams(const std::string& strMimeParams);
 };
 

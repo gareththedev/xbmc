@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -27,8 +27,11 @@
 #include "filesystem/SpecialProtocol.h"
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
+#include "settings/DisplaySettings.h"
+#include "guilib/GraphicContext.h"
 #include "guilib/Texture.h"
 #include "windowing/X11/XRandR.h"
+#include "utils/StringUtils.h"
 #include <vector>
 
 using namespace std;
@@ -83,8 +86,8 @@ CWinSystemX11GLES::CWinSystemX11GLES() : CWinSystemBase()
   m_eglDisplay = NULL;
   m_eglContext = NULL;
   m_eglSurface = NULL;
-  m_eglWindow  = NULL;
-  m_wmWindow   = NULL;
+  m_eglWindow  = None;
+  m_wmWindow   = None;
   m_dpy        = NULL;
   
   m_iVSyncErrors = 0;
@@ -156,7 +159,7 @@ bool CWinSystemX11GLES::CreateNewWindow(const CStdString& name, bool fullScreen,
 	return false;
 
   CTexture iconTexture;
-  iconTexture.LoadFromFile("special://xbmc/media/icon.png");
+  iconTexture.LoadFromFile("special://xbmc/media/icon256x256.png");
 
   SDL_WM_SetIcon(SDL_CreateRGBSurfaceFrom(iconTexture.GetPixels(), iconTexture.GetWidth(), iconTexture.GetHeight(), BPP, iconTexture.GetPitch(), 0xff0000, 0x00ff00, 0x0000ff, 0xff000000L), NULL);
   SDL_WM_SetCaption("XBMC Media Center", NULL);
@@ -276,14 +279,14 @@ void CWinSystemX11GLES::UpdateResolutions()
   vector<XOutput>::iterator outiter;
   vector<XOutput> outs;
   outs = g_xrandr.GetModes();
-  CLog::Log(LOGINFO, "Number of connected outputs: %"PRIdS"", outs.size());
+  CLog::Log(LOGINFO, "Number of connected outputs: %" PRIdS"", outs.size());
   string modename = "";
 
   for (outiter = outs.begin() ; outiter != outs.end() ; outiter++)
   {
     XOutput out = *outiter;
     vector<XMode>::iterator modeiter;
-    CLog::Log(LOGINFO, "Output '%s' has %"PRIdS" modes", out.name.c_str(), out.modes.size());
+    CLog::Log(LOGINFO, "Output '%s' has %" PRIdS" modes", out.name.c_str(), out.modes.size());
 
     for (modeiter = out.modes.begin() ; modeiter!=out.modes.end() ; modeiter++)
     {
@@ -302,7 +305,7 @@ void CWinSystemX11GLES::UpdateResolutions()
 
       CLog::Log(LOGINFO, "Pixel Ratio: %f", res.fPixelRatio);
 
-      res.strMode.Format("%s: %s @ %.2fHz", out.name.c_str(), mode.name.c_str(), mode.hz);
+      res.strMode      = StringUtils::Format("%s: %s @ %.2fHz", out.name.c_str(), mode.name.c_str(), mode.hz);
       res.strOutput    = out.name;
       res.strId        = mode.id;
       res.iSubtitles   = (int)(0.95*mode.h);

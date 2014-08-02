@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -13,9 +13,8 @@
  *  GNU General Public License for more details.
  *
  *  You should have received a copy of the GNU General Public License
- *  along with XBMC; see the file COPYING.  If not, write to
- *  the Free Software Foundation, 675 Mass Ave, Cambridge, MA 02139, USA.
- *  http://www.gnu.org/copyleft/gpl.html
+ *  along with XBMC; see the file COPYING.  If not, see
+ *  <http://www.gnu.org/licenses/>.
  *
  */
 #include "limits.h"
@@ -52,6 +51,7 @@ TagLibVFSStream::TagLibVFSStream(const string& strFileName, bool readOnly)
       m_bIsOpen = false;
   }
   m_strFileName = strFileName;
+  m_bIsReadOnly = readOnly || !m_bIsOpen;
 }
 
 /*!
@@ -240,6 +240,38 @@ bool TagLibVFSStream::isOpen() const
  */
 void TagLibVFSStream::seek(long offset, Position p)
 {
+  const long fileLen = length();
+  if (m_bIsReadOnly && fileLen > 0)
+  {
+    long startPos;
+    if (p == Beginning)
+      startPos = 0;
+    else if (p == Current)
+      startPos = tell();
+    else if (p == End)
+      startPos = fileLen;
+    else
+      return; // wrong Position value
+    
+    // When parsing some broken files, taglib may try to seek above end of file.
+    // If underlying VFS does not move I/O pointer in this case, taglib will parse
+    // same part of file several times and ends with error. To prevent this
+    // situation, force seek to last valid position so VFS move I/O pointer.
+    if (startPos >= 0)
+    {
+      if (offset < 0 && startPos + offset < 0)
+      {
+        m_file.Seek(0, SEEK_SET);
+        return;
+      }
+      if (offset > 0 && startPos + offset > fileLen)
+      {
+        m_file.Seek(fileLen, SEEK_SET);
+        return;
+      }
+    }
+  }
+
   switch(p)
   {
     case Beginning:

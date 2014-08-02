@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -175,7 +175,7 @@ void CHALManager::Initialize()
 
   GenerateGDL();
 
-  CLog::Log(LOGINFO, "HAL: Sucessfully initialized");
+  CLog::Log(LOGINFO, "HAL: Successfully initialized");
   m_Notifications = true;
 }
 
@@ -427,12 +427,12 @@ void CHALManager::HandleNewVolume(CStorageDevice *dev)
       if (Mountable)
       {
         CLog::Log(LOGNOTICE, "HAL: Trying to mount %s", dev->FriendlyName.c_str());
-        CStdString MountPoint;
-        CStdString TestPath;
+        std::string MountPoint;
+        std::string TestPath;
         if (dev->Label.size() > 0)
         {
           MountPoint = dev->Label.c_str();
-          TestPath.Format("/media/%s", MountPoint.c_str());
+          TestPath = StringUtils::Format("/media/%s", MountPoint.c_str());
           struct stat St;
           if (stat("/media", &St) != 0)
             return; //If /media doesn't exist something is wrong.
@@ -440,13 +440,13 @@ void CHALManager::HandleNewVolume(CStorageDevice *dev)
           {
             CLog::Log(LOGDEBUG, "HAL: Proposed Mountpoint already existed");
             MountPoint.append("_");
-            TestPath.Format("/media/%s", MountPoint.c_str());
+            TestPath = StringUtils::Format("/media/%s", MountPoint.c_str());
           }
         }
         else
         {
           MountPoint = StorageTypeToString(dev->Type);
-          TestPath.Format("/media/%s", MountPoint.c_str());
+          TestPath = StringUtils::Format("/media/%s", MountPoint.c_str());
           int Nbr = 0;
           struct stat St;
           if (stat("/media", &St) != 0)
@@ -455,8 +455,8 @@ void CHALManager::HandleNewVolume(CStorageDevice *dev)
           {
             CLog::Log(LOGDEBUG, "HAL: Proposed Mountpoint already existed");
             Nbr++;
-            MountPoint.Format("%s%i", StorageTypeToString(dev->Type), Nbr);
-            TestPath.Format("/media/%s", MountPoint.c_str());
+            MountPoint = StringUtils::Format("%s%i", StorageTypeToString(dev->Type), Nbr);
+            TestPath = StringUtils::Format("/media/%s", MountPoint.c_str());
           }
         }
         if (Mount(dev, MountPoint))
@@ -598,7 +598,7 @@ bool CHALManager::ApproveDevice(CStorageDevice *device)
     approve = false;
 
   // Ignore some mountpoints, unless a weird setup these should never contain anything usefull for an enduser.
-  if (strcmp(device->MountPoint, "/") == 0 || strcmp(device->MountPoint, "/boot/") == 0 || strcmp(device->MountPoint, "/mnt/") == 0 || strcmp(device->MountPoint, "/home/") == 0)
+  if (strcmp(device->MountPoint.c_str(), "/") == 0 || strcmp(device->MountPoint.c_str(), "/boot/") == 0 || strcmp(device->MountPoint.c_str(), "/mnt/") == 0 || strcmp(device->MountPoint.c_str(), "/home/") == 0)
     approve = false;
 
   if (device->HalIgnore)
@@ -608,11 +608,11 @@ bool CHALManager::ApproveDevice(CStorageDevice *device)
   return approve;
 }
 
-bool CHALManager::Eject(CStdString path)
+bool CHALManager::Eject(const std::string& path)
 {
   for (unsigned int i = 0; i < m_Volumes.size(); i++)
   {
-    if (m_Volumes[i].MountPoint.Equals(path))
+    if (m_Volumes[i].MountPoint == path)
       return m_Volumes[i].HotPlugged ? UnMount(m_Volumes[i]) : false;
   }
 
@@ -669,7 +669,7 @@ bool CHALManager::UnMount(CStorageDevice volume)
   }
 }
 
-bool CHALManager::Mount(CStorageDevice *volume, CStdString mountpath)
+bool CHALManager::Mount(CStorageDevice *volume, const std::string &mountpath)
 {
   CLog::Log(LOGNOTICE, "HAL: Mounting %s (%s) at %s with umask=%u", volume->UDI.c_str(), volume->toString().c_str(), mountpath.c_str(), umask (0));
   DBusMessage* msg;
@@ -691,15 +691,15 @@ bool CHALManager::Mount(CStorageDevice *volume, CStdString mountpath)
     DBusMessageIter sub;
     dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, DBUS_TYPE_STRING_AS_STRING, &sub);
 
-    CStdString temporaryString;
+    std::string temporaryString;
 
-    if (volume->FileSystem.Equals("vfat"))
+    if (volume->FileSystem == "vfat")
     {
       int mask = umask (0);
-      temporaryString.Format("umask=%#o", mask);
+      temporaryString = StringUtils::Format("umask=%#o", mask);
       s = temporaryString.c_str();
       dbus_message_iter_append_basic(&sub, DBUS_TYPE_STRING, &s);
-      temporaryString.Format("uid=%u", getuid());
+      temporaryString = StringUtils::Format("uid=%u", getuid());
       s = temporaryString.c_str();
       dbus_message_iter_append_basic(&sub, DBUS_TYPE_STRING, &s);
       s = "shortname=mixed";

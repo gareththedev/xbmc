@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -24,8 +24,9 @@
 #pragma once
 
 #include <map>
+#include <string>
 #include <vector>
-#include "system.h" // for HAS_EVENT_SERVER, HAS_SDL_JOYSTICK, HAS_LIRC
+#include "system.h" // for HAS_EVENT_SERVER, HAS_SDL_JOYSTICK
 
 #ifdef HAS_EVENT_SERVER
 #include "network/EventClient.h"
@@ -38,7 +39,7 @@ class TiXmlNode;
 struct CButtonAction
 {
   int id;
-  CStdString strID; // needed for "XBMC.ActivateWindow()" type actions
+  std::string strID; // needed for "XBMC.ActivateWindow()" type actions
 };
 ///
 /// singleton class to map from buttons to actions
@@ -55,14 +56,14 @@ private:
   CButtonTranslator(const CButtonTranslator&);
   CButtonTranslator const& operator=(CButtonTranslator const&);
   virtual ~CButtonTranslator();
-  bool HasDeviceType(TiXmlNode *pWindow, CStdString type);
+  bool HasDeviceType(TiXmlNode *pWindow, std::string type);
 public:
   ///access to singleton
   static CButtonTranslator& GetInstance();
 
   // Add/remove a HID device with custom mappings
-  void AddDevice(CStdString& strDevice);
-  void RemoveDevice(CStdString& strDevice);
+  void AddDevice(std::string& strDevice);
+  void RemoveDevice(std::string& strDevice);
 
   /// loads Lircmap.xml/IRSSmap.xml (if enabled) and Keymap.xml
   bool Load(bool AlwaysLoad = false);
@@ -78,26 +79,24 @@ public:
    \param window name of the window
    \return id of the window, or WINDOW_INVALID if not found
    */
-  static int TranslateWindow(const CStdString &window);
+  static int TranslateWindow(const std::string &window);
 
   /*! \brief Translate between a window id and it's name
    \param window id of the window
    \return name of the window, or an empty string if not found
    */
-  static CStdString TranslateWindow(int window);
+  static std::string TranslateWindow(int window);
 
   static bool TranslateActionString(const char *szAction, int &action);
 
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
   int TranslateLircRemoteString(const char* szDevice, const char *szButton);
-#endif
 #if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
   bool TranslateJoystickString(int window, const char* szDevice, int id,
-                               short inputType, int& action, CStdString& strAction,
+                               short inputType, int& action, std::string& strAction,
                                bool &fullrange);
 #endif
 
-  bool TranslateTouchAction(int touchAction, int touchPointers, int &window, int &action);
+  bool TranslateTouchAction(int window, int touchAction, int touchPointers, int &action);
 
 private:
   typedef std::multimap<uint32_t, CButtonAction> buttonMap; // our button map to fill in
@@ -105,13 +104,13 @@ private:
   // m_translatorMap contains all mappings i.e. m_BaseMap + HID device mappings
   std::map<int, buttonMap> m_translatorMap;
   // m_deviceList contains the list of connected HID devices
-  std::list<CStdString> m_deviceList;
+  std::list<std::string> m_deviceList;
 
   int GetActionCode(int window, int action);
-  int GetActionCode(int window, const CKey &key, CStdString &strAction) const;
+  int GetActionCode(int window, const CKey &key, std::string &strAction) const;
 #if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
   typedef std::map<int, std::map<int, std::string> > JoystickMap; // <window, <button/axis, action> >
-  int GetActionCode(int window, int id, const JoystickMap &wmap, CStdString &strAction, bool &fullrange) const;
+  int GetActionCode(int window, int id, const JoystickMap &wmap, std::string &strAction, bool &fullrange) const;
 #endif
   int GetFallbackWindow(int windowID);
 
@@ -129,16 +128,14 @@ private:
   void MapWindowActions(TiXmlNode *pWindow, int wWindowID);
   void MapAction(uint32_t buttonCode, const char *szAction, buttonMap &map);
 
-  bool LoadKeymap(const CStdString &keymapPath);
-#if defined(HAS_LIRC) || defined(HAS_IRSERVERSUITE)
-  bool LoadLircMap(const CStdString &lircmapPath);
+  bool LoadKeymap(const std::string &keymapPath);
+  bool LoadLircMap(const std::string &lircmapPath);
   void ClearLircButtonMapEntries();
 
   void MapRemote(TiXmlNode *pRemote, const char* szDevice);
 
-  typedef std::map<CStdString, CStdString> lircButtonMap;
-  std::map<CStdString, lircButtonMap*> lircRemotesMap;
-#endif
+  typedef std::map<std::string, std::string> lircButtonMap;
+  std::map<std::string, lircButtonMap*> lircRemotesMap;
 
 #if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
   void MapJoystickActions(int windowID, TiXmlNode *pJoystick);

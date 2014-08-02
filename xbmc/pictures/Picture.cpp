@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,39 +19,38 @@
  */
 
 #include "system.h"
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
+#if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
   #include "config.h"
 #endif
 
 #include "Picture.h"
 #include "settings/AdvancedSettings.h"
-#include "settings/GUISettings.h"
+#include "settings/Settings.h"
 #include "FileItem.h"
 #include "filesystem/File.h"
 #include "utils/log.h"
 #include "utils/URIUtils.h"
-#include "DllSwScale.h"
 #include "guilib/Texture.h"
 #include "guilib/imagefactory.h"
+#include "cores/FFmpeg.h"
 #if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXImage.h"
 #endif
+
+extern "C" {
+#include "libswscale/swscale.h"
+}
 
 using namespace XFILE;
 
 bool CPicture::CreateThumbnailFromSurface(const unsigned char *buffer, int width, int height, int stride, const CStdString &thumbFile)
 {
   CLog::Log(LOGDEBUG, "cached image '%s' size %dx%d", thumbFile.c_str(), width, height);
-  if (URIUtils::GetExtension(thumbFile).Equals(".jpg"))
+  if (URIUtils::HasExtension(thumbFile, ".jpg"))
   {
 #if defined(HAS_OMXPLAYER)
-    COMXImage *omxImage = new COMXImage();
-    if (omxImage && omxImage->CreateThumbnailFromSurface((BYTE *)buffer, width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str()))
-    {
-      delete omxImage;
+    if (COMXImage::CreateThumbnailFromSurface((BYTE *)buffer, width, height, XB_FMT_A8R8G8B8, stride, thumbFile.c_str()))
       return true;
-    }
-    delete omxImage;
 #endif
   }
 
@@ -88,6 +87,11 @@ CThumbnailWriter::CThumbnailWriter(unsigned char* buffer, int width, int height,
   m_thumbFile = thumbFile;
 }
 
+CThumbnailWriter::~CThumbnailWriter()
+{
+  delete m_buffer;
+}
+
 bool CThumbnailWriter::DoWork()
 {
   bool success = true;
@@ -99,6 +103,7 @@ bool CThumbnailWriter::DoWork()
   }
 
   delete [] m_buffer;
+  m_buffer = NULL;
 
   return success;
 }
@@ -184,7 +189,7 @@ bool CPicture::CreateTiledThumb(const std::vector<std::string> &files, const std
     int y = i / num_across;
     // load in the image
     unsigned int width = tile_width - 2*tile_gap, height = tile_height - 2*tile_gap;
-    CBaseTexture *texture = CTexture::LoadFromFile(files[i], width, height, g_guiSettings.GetBool("pictures.useexifrotation"));
+    CBaseTexture *texture = CTexture::LoadFromFile(files[i], width, height, CSettings::Get().GetBool("pictures.useexifrotation"), true);
     if (texture && texture->GetWidth() && texture->GetHeight())
     {
       GetScale(texture->GetWidth(), texture->GetHeight(), width, height);
@@ -235,9 +240,7 @@ void CPicture::GetScale(unsigned int width, unsigned int height, unsigned int &o
 bool CPicture::ScaleImage(uint8_t *in_pixels, unsigned int in_width, unsigned int in_height, unsigned int in_pitch,
                           uint8_t *out_pixels, unsigned int out_width, unsigned int out_height, unsigned int out_pitch)
 {
-  DllSwScale dllSwScale;
-  dllSwScale.Load();
-  struct SwsContext *context = dllSwScale.sws_getContext(in_width, in_height, PIX_FMT_BGRA,
+  struct SwsContext *context = sws_getContext(in_width, in_height, PIX_FMT_BGRA,
                                                          out_width, out_height, PIX_FMT_BGRA,
                                                          SWS_FAST_BILINEAR | SwScaleCPUFlags(), NULL, NULL, NULL);
 
@@ -248,8 +251,8 @@ bool CPicture::ScaleImage(uint8_t *in_pixels, unsigned int in_width, unsigned in
 
   if (context)
   {
-    dllSwScale.sws_scale(context, src, srcStride, 0, in_height, dst, dstStride);
-    dllSwScale.sws_freeContext(context);
+    sws_scale(context, src, srcStride, 0, in_height, dst, dstStride);
+    sws_freeContext(context);
     return true;
   }
   return false;

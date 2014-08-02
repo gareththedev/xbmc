@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
  */
 
 #include "system.h"
-#if defined(_WIN32)
+#if defined(TARGET_WINDOWS)
 #include "WIN32Util.h"
 #include "util.h"
 #include "dialogs/GUIDialogKaiToast.h"
@@ -36,13 +36,16 @@
 #include "threads/Thread.h"
 #include "utils/log.h"
 #include "utils/fastmemcpy.h"
-#include "DllSwScale.h"
+extern "C" {
+#include "libswscale/swscale.h"
+}
 #include "utils/TimeUtils.h"
 #include "windowing/WindowingFactory.h"
+#include "cores/FFmpeg.h"
 
 namespace BCM
 {
-  #if defined(WIN32)
+  #if defined(TARGET_WINDOWS)
     typedef void		*HANDLE;
   #else
     #ifndef __LINUX_USER__
@@ -166,7 +169,7 @@ public:
 };
 
 void PrintFormat(BCM::BC_PIC_INFO_BLOCK &pib);
-void BcmDebugLog( BCM::BC_STATUS lResult, CStdString strFuncName="");
+void BcmDebugLog( BCM::BC_STATUS lResult, std::string strFuncName="");
 
 const char* g_DtsStatusText[] = {
 	"BC_STS_SUCCESS",
@@ -248,7 +251,6 @@ protected:
   int                 m_aspectratio_x;
   int                 m_aspectratio_y;
   CEvent              m_ready_event;
-  DllSwScale          *m_dllSwScale;
   struct SwsContext   *m_sw_scale_ctx;
 };
 
@@ -348,9 +350,6 @@ CMPCOutputThread::CMPCOutputThread(void *device, DllLibCrystalHD *dll, bool has_
   m_aspectratio_y(1)
 {
   m_sw_scale_ctx = NULL;
-  m_dllSwScale = new DllSwScale;
-  m_dllSwScale->Load();
-
   
   if (g_Windowing.GetRenderQuirks() & RENDER_QUIRKS_YV12_PREFERED)
     m_output_YV12 = true;
@@ -366,8 +365,7 @@ CMPCOutputThread::~CMPCOutputThread()
     delete m_FreeList.Pop();
     
   if (m_sw_scale_ctx)
-    m_dllSwScale->sws_freeContext(m_sw_scale_ctx);
-  delete m_dllSwScale;
+    sws_freeContext(m_sw_scale_ctx);
 }
 
 unsigned int CMPCOutputThread::GetReadyCount(void)
@@ -672,12 +670,11 @@ void CMPCOutputThread::CopyOutAsYV12(CPictureBuffer *pBuffer, BCM::BC_DTS_PROC_O
   }
   //copy chroma
   //copy uv packed to u,v planes (1/2 the width and 1/2 the height of y)
-  uint8_t *s_uv;
   uint8_t *d_u = pBuffer->m_u_buffer_ptr;
   uint8_t *d_v = pBuffer->m_v_buffer_ptr;
   for (int y = 0; y < h/2; y++)
   {
-    s_uv = procOut->UVbuff + (y * stride);
+    uint8_t *s_uv = procOut->UVbuff + (y * stride);
     for (int x = 0; x < w/2; x++)
     {
       *d_u++ = *s_uv++;
@@ -700,12 +697,11 @@ void CMPCOutputThread::CopyOutAsYV12DeInterlace(CPictureBuffer *pBuffer, BCM::BC
   }
   //copy chroma
   //copy uv packed to u,v planes (1/2 the width and 1/2 the height of y)
-  uint8_t *s_uv;
   uint8_t *d_u = pBuffer->m_u_buffer_ptr;
   uint8_t *d_v = pBuffer->m_v_buffer_ptr;
   for (int y = 0; y < h/4; y++)
   {
-    s_uv = procOut->UVbuff + (y * stride);
+    uint8_t *s_uv = procOut->UVbuff + (y * stride);
     for (int x = 0; x < w/2; x++)
     {
       *d_u++ = *s_uv++;
@@ -951,11 +947,11 @@ bool CMPCOutputThread::GetDecoderOutput(void)
                   uint8_t* dst[] =       { pBuffer->m_y_buffer_ptr, pBuffer->m_u_buffer_ptr, pBuffer->m_v_buffer_ptr, NULL };
                   int      dstStride[] = { pBuffer->m_width, pBuffer->m_width/2, pBuffer->m_width/2, 0 };
 
-                  m_sw_scale_ctx = m_dllSwScale->sws_getCachedContext(m_sw_scale_ctx,
+                  m_sw_scale_ctx = sws_getCachedContext(m_sw_scale_ctx,
                     pBuffer->m_width, pBuffer->m_height, PIX_FMT_YUYV422,
                     pBuffer->m_width, pBuffer->m_height, PIX_FMT_YUV420P,
                     SWS_FAST_BILINEAR | SwScaleCPUFlags(), NULL, NULL, NULL);
-                  m_dllSwScale->sws_scale(m_sw_scale_ctx, src, srcStride, 0, pBuffer->m_height, dst, dstStride);
+                  sws_scale(m_sw_scale_ctx, src, srcStride, 0, pBuffer->m_height, dst, dstStride);
                 }
               break;
               default:
@@ -971,7 +967,7 @@ bool CMPCOutputThread::GetDecoderOutput(void)
         else
         {
           if (m_PictureNumber != procOut.PicInfo.picture_number)
-            CLog::Log(LOGDEBUG, "%s: No timestamp detected: %"PRIu64, __MODULE_NAME__, procOut.PicInfo.timeStamp);
+            CLog::Log(LOGDEBUG, "%s: No timestamp detected: %" PRIu64, __MODULE_NAME__, procOut.PicInfo.timeStamp);
           m_PictureNumber = procOut.PicInfo.picture_number;
         }
       }
@@ -1118,8 +1114,8 @@ CCrystalHD::CCrystalHD() :
   memset(&m_sps_pps_context, 0, sizeof(m_sps_pps_context));
 
   m_dll = new DllLibCrystalHD;
-#ifdef _WIN32
-  CStdString  strDll;
+#ifdef TARGET_WINDOWS
+  std::string  strDll;
   if(CWIN32Util::GetCrystalHDLibraryPath(strDll) && m_dll->SetFile(strDll) && m_dll->Load() && m_dll->IsLoaded() )
 #else
   if (m_dll->Load() && m_dll->IsLoaded() )
@@ -1647,10 +1643,10 @@ bool CCrystalHD::GetPicture(DVDVideoPicture *pDvdVideoPicture)
     default:
     case RENDER_FMT_NV12:
       // Y plane
-      pDvdVideoPicture->data[0] = (BYTE*)pBuffer->m_y_buffer_ptr;
+      pDvdVideoPicture->data[0] = (uint8_t*)pBuffer->m_y_buffer_ptr;
       pDvdVideoPicture->iLineSize[0] = pBuffer->m_width;
       // UV packed plane
-      pDvdVideoPicture->data[1] = (BYTE*)pBuffer->m_uv_buffer_ptr;
+      pDvdVideoPicture->data[1] = (uint8_t*)pBuffer->m_uv_buffer_ptr;
       pDvdVideoPicture->iLineSize[1] = pBuffer->m_width;
       // unused
       pDvdVideoPicture->data[2] = NULL;
@@ -1658,7 +1654,7 @@ bool CCrystalHD::GetPicture(DVDVideoPicture *pDvdVideoPicture)
     break;
     case RENDER_FMT_YUYV422:
       // YUV packed plane
-      pDvdVideoPicture->data[0] = (BYTE*)pBuffer->m_y_buffer_ptr;
+      pDvdVideoPicture->data[0] = (uint8_t*)pBuffer->m_y_buffer_ptr;
       pDvdVideoPicture->iLineSize[0] = pBuffer->m_width * 2;
       // unused
       pDvdVideoPicture->data[1] = NULL;
@@ -1669,13 +1665,13 @@ bool CCrystalHD::GetPicture(DVDVideoPicture *pDvdVideoPicture)
     break;
     case RENDER_FMT_YUV420P:
       // Y plane
-      pDvdVideoPicture->data[0] = (BYTE*)pBuffer->m_y_buffer_ptr;
+      pDvdVideoPicture->data[0] = (uint8_t*)pBuffer->m_y_buffer_ptr;
       pDvdVideoPicture->iLineSize[0] = pBuffer->m_width;
       // U plane
-      pDvdVideoPicture->data[1] = (BYTE*)pBuffer->m_u_buffer_ptr;
+      pDvdVideoPicture->data[1] = (uint8_t*)pBuffer->m_u_buffer_ptr;
       pDvdVideoPicture->iLineSize[1] = pBuffer->m_width / 2;
       // V plane
-      pDvdVideoPicture->data[2] = (BYTE*)pBuffer->m_v_buffer_ptr;
+      pDvdVideoPicture->data[2] = (uint8_t*)pBuffer->m_v_buffer_ptr;
       pDvdVideoPicture->iLineSize[2] = pBuffer->m_width / 2;
     break;
   }
@@ -1896,7 +1892,7 @@ bool CCrystalHD::bitstream_convert_init(void *in_extradata, int in_extrasize)
   return true;
 }
 
-bool CCrystalHD::bitstream_convert(BYTE* pData, int iSize, uint8_t **poutbuf, int *poutbuf_size)
+bool CCrystalHD::bitstream_convert(uint8_t* pData, int iSize, uint8_t **poutbuf, int *poutbuf_size)
 {
   // based on h264_mp4toannexb_bsf.c (ffmpeg)
   // which is Copyright (c) 2007 Benoit Fouet <benoit.fouet@free.fr>
@@ -1994,7 +1990,7 @@ void CCrystalHD::bitstream_alloc_and_copy(
 void PrintFormat(BCM::BC_PIC_INFO_BLOCK &pib)
 {
   CLog::Log(LOGDEBUG, "----------------------------------\n%s","");
-  CLog::Log(LOGDEBUG, "\tTimeStamp: %"PRIu64"\n", pib.timeStamp);
+  CLog::Log(LOGDEBUG, "\tTimeStamp: %" PRIu64"\n", pib.timeStamp);
   CLog::Log(LOGDEBUG, "\tPicture Number: %d\n", pib.picture_number);
   CLog::Log(LOGDEBUG, "\tWidth: %d\n", pib.width);
   CLog::Log(LOGDEBUG, "\tHeight: %d\n", pib.height);

@@ -24,9 +24,6 @@
 #include "PlayerCoreFactory.h"
 #include "cores/dvdplayer/DVDPlayer.h"
 #include "cores/paplayer/PAPlayer.h"
-#if defined(HAS_AMLPLAYER)
-#include "cores/amlplayer/AMLPlayer.h"
-#endif
 #if defined(HAS_OMXPLAYER)
 #include "cores/omxplayer/OMXPlayer.h"
 #endif
@@ -41,7 +38,7 @@ class CPlayerCoreConfig
 friend class CPlayerCoreFactory;
 
 public:
-  CPlayerCoreConfig(CStdString name, const EPLAYERCORES eCore, const TiXmlElement* pConfig, const CStdString& id = "")
+  CPlayerCoreConfig(std::string name, const EPLAYERCORES eCore, const TiXmlElement* pConfig, const std::string& id = "")
   {
     m_name = name;
     m_id = id;
@@ -69,12 +66,12 @@ public:
     SAFE_DELETE(m_config);
   }
 
-  const CStdString& GetName() const
+  const std::string& GetName() const
   {
     return m_name;
   }
 
-  const CStdString& GetId() const
+  const std::string& GetId() const
   {
     return m_id;
   }
@@ -96,18 +93,11 @@ public:
         pPlayer = new COMXPlayer(callback); 
         CLog::Log(LOGINFO, "Created player %s for core %d / OMXPlayer forced as DVDPlayer", "OMXPlayer", m_eCore);
         break;
-      case EPC_PAPLAYER: 
-        pPlayer = new COMXPlayer(callback); 
-        CLog::Log(LOGINFO, "Created player %s for core %d / OMXPlayer forced as PAPLayer", "OMXPlayer", m_eCore);
-        break;
 #else
       case EPC_DVDPLAYER: pPlayer = new CDVDPlayer(callback); break;
+#endif
       case EPC_PAPLAYER: pPlayer = new PAPlayer(callback); break;
-#endif
       case EPC_EXTPLAYER: pPlayer = new CExternalPlayer(callback); break;
-#if defined(HAS_AMLPLAYER)
-      case EPC_AMLPLAYER: pPlayer = new CAMLPlayer(callback); break;
-#endif
 #if defined(HAS_OMXPLAYER)
       case EPC_OMXPLAYER: pPlayer = new COMXPlayer(callback); break;
 #endif
@@ -129,8 +119,8 @@ public:
   }
 
 private:
-  CStdString m_name;
-  CStdString m_id;
+  std::string m_name;
+  std::string m_id;
   bool m_bPlaysAudio;
   bool m_bPlaysVideo;
   EPLAYERCORES m_eCore;

@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2012-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,8 +31,12 @@
 #include "utils/TimeUtils.h"
 #include "utils/RegExp.h"
 #include "ApplicationMessenger.h"
+#include "windowing/WindowingFactory.h"
 #include "utils/CharsetConverter.h"
 
+#if defined(TARGET_DARWIN)
+#include "osx/CocoaInterface.h"
+#endif
 
 // Symbol mapping (based on MS virtual keyboard - may need improving)
 static char symbol_map[37] = ")!@#$%^&*([]{}-_=+;:\'\",.<>/?\\|`~    ";
@@ -68,6 +72,8 @@ CGUIDialogKeyboardGeneric::CGUIDialogKeyboardGeneric()
   m_hiddenInput = false;
   m_keyType = LOWER;
   m_strHeading = "";
+  m_iCursorPos = 0;
+  m_iEditingOffset = 0;
   m_lastRemoteClickTime = 0;
   m_loadType = KEEP_IN_MEMORY;
 }
@@ -81,7 +87,7 @@ void CGUIDialogKeyboardGeneric::OnInitWindow()
   // set alphabetic (capitals)
   UpdateButtons();
 
-  CGUILabelControl* pEdit = ((CGUILabelControl*)GetControl(CTL_LABEL_EDIT));
+  CGUILabelControl* pEdit = dynamic_cast<CGUILabelControl*>(GetControl(CTL_LABEL_EDIT));
   if (pEdit)
   {
     pEdit->ShowCursor();
@@ -97,12 +103,13 @@ void CGUIDialogKeyboardGeneric::OnInitWindow()
   {
     SET_CONTROL_HIDDEN(CTL_LABEL_HEADING);
   }
+  g_Windowing.EnableTextInput(true);
 
   CVariant data;
   data["title"] = m_strHeading;
   data["type"] = !m_hiddenInput ? "keyboard" : "password";
   data["value"] = GetText();
-  ANNOUNCEMENT::CAnnouncementManager::Announce(ANNOUNCEMENT::Input, "xbmc", "OnInputRequested", data);
+  ANNOUNCEMENT::CAnnouncementManager::Get().Announce(ANNOUNCEMENT::Input, "xbmc", "OnInputRequested", data);
 }
 
 bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
@@ -122,7 +129,7 @@ bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
   }
   else if (action.GetID() == ACTION_CURSOR_RIGHT)
   {
-    if ((unsigned int) GetCursorPos() == m_strEdit.size() && (m_strEdit.size() == 0 || m_strEdit[m_strEdit.size() - 1] != ' '))
+    if (m_strEditing.empty() && (unsigned int) GetCursorPos() == m_strEdit.size() && (m_strEdit.size() == 0 || m_strEdit[m_strEdit.size() - 1] != ' '))
     { // add a space
       Character(L' ');
     }
@@ -141,8 +148,14 @@ bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
   {
     OnRemoteNumberClick(action.GetID());
   }
+  else if (action.GetID() == ACTION_PASTE)
+  {
+    OnPasteClipboard();
+  }
   else if (action.GetID() >= KEY_VKEY && action.GetID() < KEY_ASCII)
   { // input from the keyboard (vkey, not ascii)
+    if (!m_strEditing.empty())
+      return handled;
     uint8_t b = action.GetID() & 0xFF;
     if (b == XBMCVK_HOME)
     {
@@ -150,7 +163,7 @@ bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
     }
     else if (b == XBMCVK_END)
     {
-      SetCursorPos(m_strEdit.GetLength());
+      SetCursorPos(m_strEdit.size());
     }
     else if (b == XBMCVK_LEFT)
     {
@@ -166,7 +179,7 @@ bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
     }
     else if (b == XBMCVK_DELETE)
     {
-      if (GetCursorPos() < m_strEdit.GetLength())
+      if (GetCursorPos() < (int)m_strEdit.size())
       {
         MoveCursor(1);
         Backspace();
@@ -200,14 +213,16 @@ bool CGUIDialogKeyboardGeneric::OnAction(const CAction &action)
         Close();
         break;
       case 0x7F: // Delete
-        if (GetCursorPos() < m_strEdit.GetLength())
+        if (GetCursorPos() < (int)m_strEdit.size())
         {
           MoveCursor(1);
           Backspace();
         }
         break;
       default:  //use character input
-        Character(action.GetUnicode());
+        // When we support text input method, we only accept text by gui text message.
+        if (!g_Windowing.IsTextInputEnabled())
+          Character(action.GetUnicode());
         break;
       }
     }
@@ -281,22 +296,57 @@ bool CGUIDialogKeyboardGeneric::OnMessage(CGUIMessage& message)
     if (message.GetParam1() > 0)
       OnOK();
     break;
+
+  case GUI_MSG_INPUT_TEXT:
+    InputText(message.GetLabel());
+    break;
+
+  case GUI_MSG_INPUT_TEXT_EDIT:
+    InputTextEditing(message.GetLabel(), message.GetParam1(), message.GetParam2());
+    break;
   }
 
   return true;
 }
 
-void CGUIDialogKeyboardGeneric::SetText(const CStdString& aTextString)
+void CGUIDialogKeyboardGeneric::SetText(const std::string& aTextString)
 {
-  m_strEdit.Empty();
+  m_strEdit.clear();
+  m_strEditing.clear();
+  m_iEditingOffset = 0;
   g_charsetConverter.utf8ToW(aTextString, m_strEdit);
   UpdateLabel();
   SetCursorPos(m_strEdit.size());
 }
 
-CStdString CGUIDialogKeyboardGeneric::GetText() const
+void CGUIDialogKeyboardGeneric::InputText(const std::string& aTextString)
 {
-  CStdString utf8String;
+  std::wstring newStr;
+  g_charsetConverter.utf8ToW(aTextString, newStr);
+  if (!newStr.empty())
+  {
+    m_strEditing.clear();
+    m_iEditingOffset = 0;
+    m_strEdit.insert(GetCursorPos(), newStr);
+    UpdateLabel();
+    MoveCursor(newStr.size());
+  }
+}
+
+void CGUIDialogKeyboardGeneric::InputTextEditing(const std::string& aTextString, int start, int length)
+{
+  m_strEditing.clear();
+  m_iEditingOffset = start;
+  m_iEditingLength = length;
+  g_charsetConverter.utf8ToW(aTextString, m_strEditing);
+//  CLog::Log(LOGDEBUG, "CGUIDialogKeyboardGeneric::InputTextEditing len %lu range(%d, %d) -> range len %d", m_strEditing.size(), m_iEditingOffset, length, m_iEditingLength);
+  UpdateLabel();
+  SetCursorPos(GetCursorPos());
+}
+
+std::string CGUIDialogKeyboardGeneric::GetText() const
+{
+  std::string utf8String;
   g_charsetConverter.wToUTF8(m_strEdit, utf8String);
   return utf8String;
 }
@@ -304,8 +354,10 @@ CStdString CGUIDialogKeyboardGeneric::GetText() const
 void CGUIDialogKeyboardGeneric::Character(WCHAR ch)
 {
   if (!ch) return;
+  m_strEditing.clear();
+  m_iEditingOffset = 0;
   // TODO: May have to make this routine take a WCHAR for the symbols?
-  m_strEdit.Insert(GetCursorPos(), ch);
+  m_strEdit.insert(GetCursorPos(), 1, ch);
   UpdateLabel();
   MoveCursor(1);
 }
@@ -324,23 +376,32 @@ void CGUIDialogKeyboardGeneric::FrameMove()
 
 void CGUIDialogKeyboardGeneric::UpdateLabel() // FIXME seems to be called twice for one USB SDL keyboard action/character
 {
-  CGUILabelControl* pEdit = ((CGUILabelControl*)GetControl(CTL_LABEL_EDIT));
+  CGUILabelControl* pEdit = dynamic_cast<CGUILabelControl*>(GetControl(CTL_LABEL_EDIT));
   if (pEdit)
   {
-    CStdStringW edit = m_strEdit;
+    std::wstring edit = m_strEdit;
+    pEdit->SetHighlight(0, 0);
+    pEdit->SetSelection(0, 0);
     if (m_hiddenInput)
     { // convert to *'s
-      edit.Empty();
-      if (m_lastRemoteClickTime + REMOTE_SMS_DELAY > CTimeUtils::GetFrameTime() && m_strEdit.size())
+      edit.clear();
+      if (m_lastRemoteClickTime + REMOTE_SMS_DELAY > CTimeUtils::GetFrameTime() && m_iCursorPos > 0)
       { // using the remove to input, so display the last key input
-        edit.append(m_strEdit.size() - 1, L'*');
-        edit.append(1, m_strEdit[m_strEdit.size() - 1]);
+        edit.append(m_iCursorPos - 1, L'*');
+        edit.append(1, m_strEdit[m_iCursorPos - 1]);
       }
       else
         edit.append(m_strEdit.size(), L'*');
     }
+    else if (!m_strEditing.empty())
+    {
+      edit.insert(m_iCursorPos, m_strEditing);
+      pEdit->SetHighlight(m_iCursorPos, m_iCursorPos + m_strEditing.size());
+      if (m_iEditingLength > 0)
+        pEdit->SetSelection(m_iCursorPos + m_iEditingOffset, m_iCursorPos + m_iEditingOffset + m_iEditingLength);
+    }
     // convert back to utf8
-    CStdString utf8Edit;
+    std::string utf8Edit;
     g_charsetConverter.wToUTF8(edit, utf8Edit);
     pEdit->SetLabel(utf8Edit);
     // Send off a search message
@@ -350,7 +411,12 @@ void CGUIDialogKeyboardGeneric::UpdateLabel() // FIXME seems to be called twice 
       return;
 
     if (m_pCharCallback)
+    {
+      // do not send editing text comes from system input method
+      if (!m_hiddenInput && !m_strEditing.empty())
+        g_charsetConverter.wToUTF8(m_strEdit, utf8Edit);
       m_pCharCallback(this, utf8Edit);
+    }
   }
 }
 
@@ -460,40 +526,14 @@ char CGUIDialogKeyboardGeneric::GetCharacter(int iButton)
 
 void CGUIDialogKeyboardGeneric::UpdateButtons()
 {
-  if (m_bShift)
-  { // show the button depressed
-    CGUIMessage msg(GUI_MSG_SELECTED, GetID(), CTL_BUTTON_SHIFT);
-    OnMessage(msg);
-  }
-  else
-  {
-    CGUIMessage msg(GUI_MSG_DESELECTED, GetID(), CTL_BUTTON_SHIFT);
-    OnMessage(msg);
-  }
-  if (m_keyType == CAPS)
-  {
-    CGUIMessage msg(GUI_MSG_SELECTED, GetID(), CTL_BUTTON_CAPS);
-    OnMessage(msg);
-  }
-  else
-  {
-    CGUIMessage msg(GUI_MSG_DESELECTED, GetID(), CTL_BUTTON_CAPS);
-    OnMessage(msg);
-  }
-  if (m_keyType == SYMBOLS)
-  {
-    CGUIMessage msg(GUI_MSG_SELECTED, GetID(), CTL_BUTTON_SYMBOLS);
-    OnMessage(msg);
-  }
-  else
-  {
-    CGUIMessage msg(GUI_MSG_DESELECTED, GetID(), CTL_BUTTON_SYMBOLS);
-    OnMessage(msg);
-  }
+  SET_CONTROL_SELECTED(GetID(), CTL_BUTTON_SHIFT, m_bShift);
+  SET_CONTROL_SELECTED(GetID(), CTL_BUTTON_CAPS, m_keyType == CAPS);
+  SET_CONTROL_SELECTED(GetID(), CTL_BUTTON_SYMBOLS, m_keyType == SYMBOLS);
+
   char szLabel[2];
   szLabel[0] = 32;
   szLabel[1] = 0;
-  CStdString aLabel = szLabel;
+  std::string aLabel = szLabel;
 
   // set numerals
   for (int iButton = 48; iButton <= 57; iButton++)
@@ -539,31 +579,34 @@ void CGUIDialogKeyboardGeneric::OnDeinitWindow(int nextWindowID)
   // reset the heading (we don't always have this)
   m_strHeading = "";
 
-  ANNOUNCEMENT::CAnnouncementManager::Announce(ANNOUNCEMENT::Input, "xbmc", "OnInputFinished");
+  g_Windowing.EnableTextInput(false);
+  ANNOUNCEMENT::CAnnouncementManager::Get().Announce(ANNOUNCEMENT::Input, "xbmc", "OnInputFinished");
 }
 
 void CGUIDialogKeyboardGeneric::MoveCursor(int iAmount)
 {
+  if (!m_strEditing.empty())
+    return;
   SetCursorPos(GetCursorPos() + iAmount);
 }
 
 void CGUIDialogKeyboardGeneric::SetCursorPos(int iPos)
 {
-  CGUILabelControl* pEdit = ((CGUILabelControl*)GetControl(CTL_LABEL_EDIT));
+  if (iPos < 0)
+    iPos = 0;
+  else if (iPos > (int)m_strEdit.size())
+    iPos = (int)m_strEdit.size();
+  m_iCursorPos = iPos;
+  CGUILabelControl* pEdit = dynamic_cast<CGUILabelControl*>(GetControl(CTL_LABEL_EDIT));
   if (pEdit)
   {
-    pEdit->SetCursorPos(iPos);
+    pEdit->SetCursorPos(m_iCursorPos + (m_hiddenInput ? 0 : m_iEditingOffset));
   }
 }
 
 int CGUIDialogKeyboardGeneric::GetCursorPos() const
 {
-  const CGUILabelControl* pEdit = (const CGUILabelControl*)GetControl(CTL_LABEL_EDIT);
-  if (pEdit)
-  {
-    return pEdit->GetCursorPos();
-  }
-  return 0;
+  return m_iCursorPos;
 }
 
 void CGUIDialogKeyboardGeneric::OnSymbols()
@@ -585,9 +628,9 @@ void CGUIDialogKeyboardGeneric::OnIPAddress()
 {
   // find any IP address in the current string if there is any
   // We match to #.#.#.#
-  CStdString utf8String;
+  std::string utf8String;
   g_charsetConverter.wToUTF8(m_strEdit, utf8String);
-  CStdString ip;
+  std::string ip;
   CRegExp reg;
   reg.RegComp("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+");
   int start = reg.RegFind(utf8String.c_str());
@@ -595,16 +638,16 @@ void CGUIDialogKeyboardGeneric::OnIPAddress()
   if (start > -1)
   {
     length = reg.GetSubLength(0);
-    ip = utf8String.Mid(start, length);
+    ip = utf8String.substr(start, length);
   }
   else
     start = utf8String.size();
   if (CGUIDialogNumeric::ShowAndGetIPAddress(ip, g_localizeStrings.Get(14068)))
   {
-    utf8String = utf8String.Left(start) + ip + utf8String.Mid(start + length);
+    utf8String = utf8String.substr(0, start) + ip.c_str() + utf8String.substr(start + length);
     g_charsetConverter.utf8ToW(utf8String, m_strEdit);
     UpdateLabel();
-    CGUILabelControl* pEdit = ((CGUILabelControl*)GetControl(CTL_LABEL_EDIT));
+    CGUILabelControl* pEdit = dynamic_cast<CGUILabelControl*>(GetControl(CTL_LABEL_EDIT));
     if (pEdit)
       pEdit->SetCursorPos(m_strEdit.size());
   }
@@ -619,7 +662,7 @@ void CGUIDialogKeyboardGeneric::ResetShiftAndSymbols()
 
 const char* CGUIDialogKeyboardGeneric::s_charsSeries[10] = { " 0!@#$%^&*()[]{}<>/\\|", ".,1;:\'\"-+_=?`~", "ABC2", "DEF3", "GHI4", "JKL5", "MNO6", "PQRS7", "TUV8", "WXYZ9" };
 
-void CGUIDialogKeyboardGeneric::SetControlLabel(int id, const CStdString &label)
+void CGUIDialogKeyboardGeneric::SetControlLabel(int id, const std::string &label)
 { // find all controls with this id, and set all their labels
   CGUIMessage message(GUI_MSG_LABEL_SET, GetID(), id);
   message.SetLabel(label);
@@ -666,7 +709,7 @@ bool CGUIDialogKeyboardGeneric::ShowAndGetInput(char_callback_t pCallback, const
   pKeyboard->SetHiddenInput(bHiddenInput);
   pKeyboard->SetText(initialString);
   // do this using a thread message to avoid render() conflicts
-  ThreadMessage tMsg = {TMSG_DIALOG_DOMODAL, WINDOW_DIALOG_KEYBOARD, (unsigned int)g_windowManager.GetActiveWindow()};
+  ThreadMessage tMsg = {TMSG_DIALOG_DOMODAL, WINDOW_DIALOG_KEYBOARD, g_windowManager.GetActiveWindow()};
   CApplicationMessenger::Get().SendMessage(tMsg, true);
   pKeyboard->Close();
 
@@ -677,4 +720,31 @@ bool CGUIDialogKeyboardGeneric::ShowAndGetInput(char_callback_t pCallback, const
     return true;
   }
   else return false;
+}
+
+void CGUIDialogKeyboardGeneric::OnPasteClipboard(void)
+{
+  std::wstring unicode_text;
+  std::string utf8_text;
+
+// Get text from the clipboard
+  utf8_text = g_Windowing.GetClipboardText();
+
+  // Insert the pasted text at the current cursor position.
+  if (utf8_text.length() > 0)
+  {
+    g_charsetConverter.utf8ToW(utf8_text, unicode_text);
+
+    size_t i = GetCursorPos();
+    if (i > m_strEdit.size())
+      i = m_strEdit.size();
+    std::wstring left_end = m_strEdit.substr(0, i);
+    std::wstring right_end = m_strEdit.substr(i);
+
+    m_strEdit = left_end;
+    m_strEdit.append(unicode_text);
+    m_strEdit.append(right_end);
+    UpdateLabel();
+    MoveCursor(unicode_text.length());
+  }
 }

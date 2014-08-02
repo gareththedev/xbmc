@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
  *
  */
 
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
+#if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
   #include "config.h"
 #endif
 #include "threads/CriticalSection.h"
@@ -31,15 +31,7 @@
 class IAEStream;
 
 extern "C" {
-#if (defined USE_EXTERNAL_FFMPEG)
-  #if (defined HAVE_LIBAVCODEC_AVCODEC_H)
-    #include <libavcodec/avcodec.h>
-  #elif (defined HAVE_FFMPEG_AVCODEC_H)
-    #include <ffmpeg/avcodec.h>
-  #endif
-#else
-  #include "libavcodec/avcodec.h"
-#endif
+#include "libavcodec/avcodec.h"
 }
 
 typedef struct stDVDAudioFrame DVDAudioFrame;
@@ -54,9 +46,9 @@ private:
 
 public:
   CPTSOutputQueue();
-  void Add(double pts, double delay, double duration);
+  void Add(double pts, double delay, double duration, double timestamp);
   void Flush();
-  double Current();
+  double Current(double timestamp);
 };
 
 class CSingleLock;
@@ -76,12 +68,12 @@ public:
   float GetCurrentAttenuation();
   void Pause();
   void Resume();
-  bool Create(const DVDAudioFrame &audioframe, CodecID codec, bool needresampler);
+  bool Create(const DVDAudioFrame &audioframe, AVCodecID codec, bool needresampler);
   bool IsValidFormat(const DVDAudioFrame &audioframe);
   void Destroy();
-  DWORD AddPackets(const DVDAudioFrame &audioframe);
+  unsigned int AddPackets(const DVDAudioFrame &audioframe);
   double GetDelay(); // returns the time it takes to play a packet if we add one at this time
-  double GetPlayingPts() { return m_time.Current(); }
+  double GetPlayingPts();
   void   SetPlayingPts(double pts);
   double GetCacheTime();  // returns total amount of data cached in audio output at this time
   double GetCacheTotal(); // returns total amount the audio device can buffer
@@ -95,10 +87,6 @@ public:
   IAEStream *m_pAudioStream;
 protected:
   CPTSOutputQueue m_time;
-  DWORD AddPacketsRenderer(unsigned char* data, DWORD len, CSingleLock &lock);
-  BYTE* m_pBuffer; // should be [m_dwPacketSize]
-  DWORD m_iBufferSize;
-  DWORD m_dwPacketSize;
   CCriticalSection m_critSection;
 
   int m_iBitrate;

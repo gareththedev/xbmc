@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,14 +21,17 @@
  */
 
 #include "DVDDemux.h"
-#include "DllAvFormat.h"
-#include "DllAvCodec.h"
-#include "DllAvUtil.h"
-
 #include "threads/CriticalSection.h"
 #include "threads/SystemClock.h"
+#include <map>
+#include <vector>
+
+extern "C" {
+#include "libavformat/avformat.h"
+}
 
 class CDVDDemuxFFmpeg;
+class CURL;
 
 class CDemuxStreamVideoFFmpeg
   : public CDemuxStreamVideo
@@ -80,6 +83,8 @@ public:
 #define FFMPEG_FILE_BUFFER_SIZE   32768 // default reading size for ffmpeg
 #define FFMPEG_DVDNAV_BUFFER_SIZE 2048  // for dvd's
 
+struct StereoModeConversionMap;
+
 class CDVDDemuxFFmpeg : public CDVDDemux
 {
 public:
@@ -110,7 +115,7 @@ public:
   int GetChapterCount();
   int GetChapter();
   void GetChapterName(std::string& strChapterName);
-  virtual void GetStreamCodecName(int iStreamId, CStdString &strName);
+  virtual void GetStreamCodecName(int iStreamId, std::string &strName);
 
   bool Aborted();
 
@@ -123,20 +128,25 @@ protected:
   friend class CDemuxStreamSubtitleFFmpeg;
 
   int ReadFrame(AVPacket *packet);
-  void AddStream(int iId);
+  CDemuxStream* AddStream(int iId);
+  void AddStream(int iId, CDemuxStream* stream);
+  CDemuxStream* GetStreamInternal(int iStreamId);
+  void CreateStreams(unsigned int program = UINT_MAX);
+  void DisposeStreams();
 
+  AVDictionary *GetFFMpegOptionsFromURL(const CURL &url);
   double ConvertTimestamp(int64_t pts, int den, int num);
   void UpdateCurrentPTS();
+  bool IsProgramChange();
+
+  std::string GetStereoModeFromMetadata(AVDictionary *pMetadata);
+  std::string ConvertCodecToInternalStereoMode(const std::string &mode, const StereoModeConversionMap *conversionMap);
 
   CCriticalSection m_critSection;
-  #define MAX_STREAMS 100
-  CDemuxStream* m_streams[MAX_STREAMS]; // maximum number of streams that ffmpeg can handle
+  std::map<int, CDemuxStream*> m_streams;
+  std::vector<std::map<int, CDemuxStream*>::iterator> m_stream_index;
 
   AVIOContext* m_ioContext;
-
-  DllAvFormat m_dllAvFormat;
-  DllAvCodec  m_dllAvCodec;
-  DllAvUtil   m_dllAvUtil;
 
   double   m_iCurrentPts; // used for stream length estimation
   bool     m_bMatroska;
@@ -145,5 +155,13 @@ protected:
   unsigned m_program;
   XbmcThreads::EndTime  m_timeout;
 
+  // Due to limitations of ffmpeg, we only can detect a program change
+  // with a packet. This struct saves the packet for the next read and
+  // signals STREAMCHANGE to player
+  struct
+  {
+    AVPacket pkt;       // packet ffmpeg returned
+    int      result;    // result from av_read_packet
+  }m_pkt;
 };
 

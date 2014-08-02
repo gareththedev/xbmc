@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -186,11 +186,11 @@ void CKaraokeLyricsCDG::Render()
 				  (float)(CDG_FULL_HEIGHT - CDG_BORDER_HEIGHT) / CDG_FULL_HEIGHT);
 
   // Get screen coordinates
-  RESOLUTION res = g_graphicsContext.GetVideoResolution();
-  CRect vertCoords((float)CDisplaySettings::Get().GetResolutionInfo(res).Overscan.left,
-                   (float)CDisplaySettings::Get().GetResolutionInfo(res).Overscan.top,
-                   (float)CDisplaySettings::Get().GetResolutionInfo(res).Overscan.right,
-                   (float)CDisplaySettings::Get().GetResolutionInfo(res).Overscan.bottom);
+  const RESOLUTION_INFO info = g_graphicsContext.GetResInfo();
+  CRect vertCoords((float)info.Overscan.left,
+                   (float)info.Overscan.top,
+                   (float)info.Overscan.right,
+                   (float)info.Overscan.bottom);
 
   CGUITexture::DrawQuad(vertCoords, 0xffffffff, m_pCdgTexture, &texCoords);
 }
@@ -542,34 +542,21 @@ bool CKaraokeLyricsCDG::Load()
 
   m_cdgStream.clear();
 
-  if ( !file.Open( m_cdgFile ) )
-    return false;
-
-  unsigned int cdgSize = (unsigned int) file.GetLength();
-
-  if ( !cdgSize )
+  XFILE::auto_buffer buf;
+  if (file.LoadFile(m_cdgFile, buf) <= 0)
   {
-	CLog::Log( LOGERROR, "CDG loader: CDG file %s has zero length", m_cdgFile.c_str() );
+    CLog::Log(LOGERROR, "CDG loader: can't load CDG file \"%s\"", m_cdgFile.c_str());
     return false;
   }
-
-  // Read the file into memory array
-  std::vector<BYTE> cdgdata( cdgSize );
-
-  file.Seek( 0, SEEK_SET );
-
-  // Read the whole file
-  if ( file.Read( &cdgdata[0], cdgSize) != cdgSize )
-    return false; // disk error?
 
   file.Close();
 
   // Parse the CD+G stream
   int buggy_commands = 0;
   
-  for ( unsigned int offset = 0; offset < cdgdata.size(); offset += sizeof( SubCode ) )
+  for (unsigned int offset = 0; offset < buf.size(); offset += sizeof(SubCode))
   {
-	  SubCode * sc = (SubCode *) (&cdgdata[0] + offset);
+    SubCode * sc = (SubCode *)(buf.get() + offset);
 
 	  if ( ( sc->command & CDG_MASK) == CDG_COMMAND )
 	  {

@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2012-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -39,18 +39,21 @@ class CGUIDialogKeyboardGeneric : public CGUIDialog, public CGUIKeyboard
     //CGUIDialog Interface
     virtual void FrameMove();
     void SetHeading(const std::string& heading);
-    void SetText(const CStdString& aTextString);
-    CStdString GetText() const;
+    void SetText(const std::string& aTextString);
+    void InputText(const std::string& aTextString);
+    void InputTextEditing(const std::string& aTextString, int start, int length);
+    std::string GetText() const;
     bool IsConfirmed() { return m_bIsConfirmed; };
     void SetHiddenInput(bool hiddenInput) { m_hiddenInput = hiddenInput; };
     void Character(WCHAR wch);
+    void OnPasteClipboard(void);
 
   protected:
     virtual void OnInitWindow();
     virtual bool OnAction(const CAction &action);
     virtual bool OnMessage(CGUIMessage& message);
     virtual void OnDeinitWindow(int nextWindowID);
-    void SetControlLabel(int id, const CStdString &label);
+    void SetControlLabel(int id, const std::string &label);
     void OnShift();
     void MoveCursor(int iAmount);
     void SetCursorPos(int iPos);
@@ -69,7 +72,14 @@ class CGUIDialogKeyboardGeneric : public CGUIDialog, public CGUIKeyboard
     void Backspace();
     void SendSearchMessage();
 
-    CStdStringW m_strEdit;
+    std::wstring m_strEdit;
+    int m_iCursorPos;
+
+    // holds the spelling region of keystrokes/text generated from 'input method'
+    std::wstring m_strEditing;
+    int m_iEditingOffset;
+    int m_iEditingLength;
+
     bool m_bIsConfirmed;
     KEYBOARD m_keyType;
     int m_iMode;

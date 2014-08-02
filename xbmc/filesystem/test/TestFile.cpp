@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -151,7 +151,7 @@ TEST(TestFile, Stat)
 TEST(TestFile, Delete)
 {
   XFILE::CFile *file;
-  CStdString path;
+  std::string path;
 
   ASSERT_TRUE((file = XBMC_CREATETEMPFILE("")) != NULL);
   file->Close();
@@ -164,7 +164,7 @@ TEST(TestFile, Delete)
 TEST(TestFile, Rename)
 {
   XFILE::CFile *file;
-  CStdString path1, path2;
+  std::string path1, path2;
 
   ASSERT_TRUE((file = XBMC_CREATETEMPFILE("")) != NULL);
   file->Close();
@@ -181,10 +181,10 @@ TEST(TestFile, Rename)
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
 }
 
-TEST(TestFile, Cache)
+TEST(TestFile, Copy)
 {
   XFILE::CFile *file;
-  CStdString path1, path2;
+  std::string path1, path2;
 
   ASSERT_TRUE((file = XBMC_CREATETEMPFILE("")) != NULL);
   file->Close();
@@ -195,7 +195,7 @@ TEST(TestFile, Cache)
   EXPECT_TRUE(XFILE::CFile::Delete(path1));
   EXPECT_FALSE(XFILE::CFile::Exists(path1));
   EXPECT_TRUE(XFILE::CFile::Exists(path2));
-  EXPECT_TRUE(XFILE::CFile::Cache(path2, path1));
+  EXPECT_TRUE(XFILE::CFile::Copy(path2, path1));
   EXPECT_TRUE(XFILE::CFile::Exists(path1));
   EXPECT_TRUE(XFILE::CFile::Exists(path2));
   EXPECT_TRUE(XFILE::CFile::Delete(path1));

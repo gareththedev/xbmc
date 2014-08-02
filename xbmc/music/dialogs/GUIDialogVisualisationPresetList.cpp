@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -21,11 +21,11 @@
 #include "GUIDialogVisualisationPresetList.h"
 #include "addons/Visualisation.h"
 #include "guilib/GUIWindowManager.h"
-#include "guilib/GUIListContainer.h"
 #include "GUIUserMessages.h"
 #include "FileItem.h"
 #include "guilib/Key.h"
 #include "guilib/LocalizeStrings.h"
+#include "utils/StringUtils.h"
 
 #define CONTROL_LIST           2
 #define CONTROL_PRESETS_LABEL  3
@@ -57,10 +57,10 @@ bool CGUIDialogVisualisationPresetList::OnMessage(CGUIMessage &message)
                                                     message.GetParam1() == ACTION_MOUSE_LEFT_CLICK))
       {
         //clicked - ask for the preset to be changed to the new one
-        CGUIListContainer *pList = (CGUIListContainer *)GetControl(CONTROL_LIST);
-        if (pList)
+        CGUIMessage msg(GUI_MSG_ITEM_SELECTED, GetID(), CONTROL_LIST);
+        if (OnMessage(msg))
         {
-          int iItem = pList->GetSelectedItem();
+          int iItem = (int)msg.GetParam1();
           if (m_viz)
             m_viz->OnAction(VIS_ACTION_LOAD_PRESET, (void *)&iItem);
         }
@@ -127,12 +127,12 @@ void CGUIDialogVisualisationPresetList::Update()
   CStdString strHeading;
   if (m_viz)
   {
-    strHeading.Format(g_localizeStrings.Get(13407).c_str(), m_viz->Name().c_str());
+    strHeading = StringUtils::Format(g_localizeStrings.Get(13407).c_str(), m_viz->Name().c_str());
 
     //clear filelist
     CGUIMessage msg(GUI_MSG_LABEL_RESET, GetID(), CONTROL_LIST);
     OnMessage(msg);
-    std::vector<CStdString> presets;
+    std::vector<std::string> presets;
     if (m_viz->GetPresetList(presets))
     {
       m_currentPreset = m_viz->GetPreset();

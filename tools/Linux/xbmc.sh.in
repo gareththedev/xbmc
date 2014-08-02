@@ -1,7 +1,7 @@
 #!/bin/sh
 
 #      Copyright (C) 2008-2013 Team XBMC
-#      http://www.xbmc.org
+#      http://xbmc.org
 #
 #  This Program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ prefix="@prefix@"
 exec_prefix="@exec_prefix@"
 datarootdir="@datarootdir@"
 LIBDIR="@libdir@"
+CRASHLOG_DIR=${CRASHLOG_DIR:-$HOME}
 
 # Check for some options used by this script
 while [ "$#" -gt "0" ]
@@ -38,6 +39,11 @@ do
     esac
 done
 
+command_exists()
+{
+  command -v $1 >/dev/null 2>&1
+}
+
 single_stacktrace()
 {
   # core filename is either "core.$PID" or "core"
@@ -52,7 +58,7 @@ single_stacktrace()
 
 print_crash_report()
 {
-  FILE="$HOME/xbmc_crashlog-`date +%Y%m%d_%H%M%S`.log"
+  FILE="$CRASHLOG_DIR/xbmc_crashlog-`date +%Y%m%d_%H%M%S`.log"
   echo "############## XBMC CRASH LOG ###############" >> $FILE
   echo >> $FILE
   echo "################ SYSTEM INFO ################" >> $FILE
@@ -64,7 +70,10 @@ print_crash_report()
   echo -n " Kernel: " >> $FILE
   uname -rvs >> $FILE
   echo -n " Release: " >> $FILE
-  if which lsb_release > /dev/null; then
+  if [ -f /etc/os-release ]; then
+	  . /etc/os-release
+	  echo $NAME $VERSION >> $FILE
+  elif command_exists lsb_release; then
     echo >> $FILE
     lsb_release -a 2> /dev/null | sed -e 's/^/    /' >> $FILE
   else
@@ -73,7 +82,10 @@ print_crash_report()
   echo "############## END SYSTEM INFO ##############" >> $FILE
   echo >> $FILE
   echo "############### STACK TRACE #################" >> $FILE
-  if which gdb >/dev/null 2>&1; then
+  if command_exists gdb; then
+    if command_exists systemd-coredumpctl; then
+      systemd-coredumpctl dump -o core xbmc.bin &> /dev/null
+    fi
     single_stacktrace "$PWD" 1
     # Find in plugins directories
     if [ $XBMC_HOME ]; then
@@ -113,7 +125,7 @@ if [ $RET -ne 0 ]; then
   exit $RET
 fi
 
-if which gdb >/dev/null 2>&1; then
+if command_exists gdb; then
   # Output warning in case ulimit is unsupported by shell
   eval ulimit -c unlimited
   if [ ! $? = "0" ]; then

@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,8 +23,8 @@
 #include "system.h" // until we get sane int types used here
 #include "IAudioCallback.h"
 #include "IPlayerCallback.h"
-#include "utils/StdString.h"
 #include "guilib/Geometry.h"
+#include <string>
 
 struct TextCacheStruct_t;
 class TiXmlElement;
@@ -52,7 +52,7 @@ public:
   double  starttime; /* start time in seconds */
   double  startpercent; /* start time in percent */  
   bool    identify;  /* identify mode, used for checking format and length of a file */
-  CStdString state;  /* potential playerstate to restore to */
+  std::string state;  /* potential playerstate to restore to */
   bool    fullscreen; /* player is allowed to switch to fullscreen */
   bool    video_only; /* player is not allowed to play audio streams, video streams only */
   int     dvdstart; /* for dvd media, the number of the start title and chapter*/
@@ -83,6 +83,8 @@ struct SPlayerAudioStreamInfo
 {
   int bitrate;
   int channels;
+  int samplerate;
+  int bitspersample;
   std::string language;
   std::string name;
   std::string audioCodecName;
@@ -91,6 +93,8 @@ struct SPlayerAudioStreamInfo
   {
     bitrate = 0;
     channels = 0;
+    samplerate = 0;
+    bitspersample = 0;
   }
 };
 
@@ -104,16 +108,21 @@ struct SPlayerVideoStreamInfo
 {
   int bitrate;
   float videoAspectRatio;
+  int height;
+  int width;
   std::string language;
   std::string name;
   std::string videoCodecName;
   CRect SrcRect;
   CRect DestRect;
+  std::string stereoMode;
 
   SPlayerVideoStreamInfo()
   {
     bitrate = 0;
     videoAspectRatio = 1.0f;
+    height = 0;
+    width = 0;
   }
 };
 
@@ -128,7 +137,7 @@ public:
   virtual bool OpenFile(const CFileItem& file, const CPlayerOptions& options){ return false;}
   virtual bool QueueNextFile(const CFileItem &file) { return false; }
   virtual void OnNothingToQueueNotify() {}
-  virtual bool CloseFile(){ return true;}
+  virtual bool CloseFile(bool reopen = false) = 0;
   virtual bool IsPlaying() const { return false;}
   virtual bool CanPause() { return true; };
   virtual void Pause() = 0;
@@ -137,7 +146,7 @@ public:
   virtual bool HasAudio() const = 0;
   virtual bool IsPassthrough() const { return false;}
   virtual bool CanSeek() {return true;}
-  virtual void Seek(bool bPlus = true, bool bLargeStep = false) = 0;
+  virtual void Seek(bool bPlus = true, bool bLargeStep = false, bool bChapterOverride = false) = 0;
   virtual bool SeekScene(bool bPlus = true) {return false;}
   virtual void SeekPercentage(float fPercent = 0){}
   virtual float GetPercentage(){ return 0;}
@@ -146,10 +155,9 @@ public:
   virtual void SetVolume(float volume){}
   virtual bool ControlsVolume(){ return false;}
   virtual void SetDynamicRangeCompression(long drc){}
-  virtual void GetAudioInfo( CStdString& strAudioInfo) = 0;
-  virtual void GetVideoInfo( CStdString& strVideoInfo) = 0;
-  virtual void GetGeneralInfo( CStdString& strVideoInfo) = 0;
-  virtual void Update(bool bPauseDrawing = false) = 0;
+  virtual void GetAudioInfo( std::string& strAudioInfo) = 0;
+  virtual void GetVideoInfo( std::string& strVideoInfo) = 0;
+  virtual void GetGeneralInfo( std::string& strVideoInfo) = 0;
   virtual bool CanRecord() { return false;};
   virtual bool IsRecording() { return false;};
   virtual bool Record(bool bOnOff) { return false;};
@@ -165,7 +173,7 @@ public:
   virtual void SetSubtitle(int iStream){};
   virtual bool GetSubtitleVisible(){ return false;};
   virtual void SetSubtitleVisible(bool bVisible){};
-  virtual int  AddSubtitle(const CStdString& strSubPath) {return -1;};
+  virtual int  AddSubtitle(const std::string& strSubPath) {return -1;};
 
   virtual int  GetAudioStreamCount()  { return 0; }
   virtual int  GetAudioStream()       { return -1; }
@@ -177,7 +185,7 @@ public:
 
   virtual int  GetChapterCount()                               { return 0; }
   virtual int  GetChapter()                                    { return -1; }
-  virtual void GetChapterName(CStdString& strChapterName)      { return; }
+  virtual void GetChapterName(std::string& strChapterName)     { return; }
   virtual int  SeekChapter(int iChapter)                       { return -1; }
 //  virtual bool GetChapterInfo(int chapter, SChapterInfo &info) { return false; }
 
@@ -193,10 +201,6 @@ public:
   virtual int64_t GetTotalTime() { return 0; }
   virtual void GetVideoStreamInfo(SPlayerVideoStreamInfo &info){};
   virtual int GetSourceBitrate(){ return 0;}
-  virtual int GetBitsPerSample(){ return 0;};
-  virtual int GetSampleRate(){ return 0;};
-  virtual int GetPictureWidth(){ return 0;}
-  virtual int GetPictureHeight(){ return 0;}
   virtual bool GetStreamDetails(CStreamDetails &details){ return false;}
   virtual void ToFFRW(int iSpeed = 0){};
   // Skip to next track/item inside the current media (if supported).
@@ -213,12 +217,11 @@ public:
   virtual void DoAudioWork(){};
   virtual bool OnAction(const CAction &action) { return false; };
 
-  virtual bool GetCurrentSubtitle(CStdString& strSubtitle) { strSubtitle = ""; return false; }
   //returns a state that is needed for resuming from a specific time
-  virtual CStdString GetPlayerState() { return ""; };
-  virtual bool SetPlayerState(CStdString state) { return false;};
+  virtual std::string GetPlayerState() { return ""; };
+  virtual bool SetPlayerState(const std::string& state) { return false;};
   
-  virtual CStdString GetPlayingTitle() { return ""; };
+  virtual std::string GetPlayingTitle() { return ""; };
 
   virtual bool SwitchChannel(const PVR::CPVRChannel &channel) { return false; }
 

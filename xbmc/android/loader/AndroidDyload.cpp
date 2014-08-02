@@ -144,6 +144,7 @@ void CAndroidDyload::GetDeps(string filename, strings *results)
   if(read(fd, &header, sizeof(header)) < 0)
   {
     CXBMCApp::android_printf("Cannot read elf header: %s\n", strerror(errno));
+    close(fd);
     return;
   }
 
@@ -169,7 +170,10 @@ void CAndroidDyload::GetDeps(string filename, strings *results)
   }
 
   if(!data)
+  { 
+    close(fd);
     return;
+  }
 
   for(i = 0; i < header.e_shnum; i++)
   {
@@ -195,6 +199,7 @@ void CAndroidDyload::GetDeps(string filename, strings *results)
       }
     }
   }
+  close(fd);
   return;
 }
 
@@ -265,9 +270,6 @@ void* CAndroidDyload::Open_Internal(string filename, bool checkSystem)
   }
 
   handle = dlopen(path.c_str(), RTLD_LOCAL);
-
-  if (handle == NULL)
-    CXBMCApp::android_printf("xb_dlopen: Error from dlopen(%s): %s", path.c_str(), dlerror());
 
   recursivelibdep dep;
   dep.handle = handle;

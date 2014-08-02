@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -40,12 +40,13 @@ public:
   class CLogGlobals
   {
   public:
-    CLogGlobals() : m_file(NULL), m_repeatCount(0), m_repeatLogLevel(-1), m_logLevel(LOG_LEVEL_DEBUG) {}
+    CLogGlobals() : m_file(NULL), m_repeatCount(0), m_repeatLogLevel(-1), m_logLevel(LOG_LEVEL_DEBUG), m_extraLogLevels(0) {}
     FILE*       m_file;
     int         m_repeatCount;
     int         m_repeatLogLevel;
     std::string m_repeatLine;
     int         m_logLevel;
+    int         m_extraLogLevels;
     CCriticalSection critSec;
   };
 
@@ -57,6 +58,7 @@ public:
   static bool Init(const char* path);
   static void SetLogLevel(int level);
   static int  GetLogLevel();
+  static void SetExtraLogLevels(int level);
 private:
   static void OutputDebugString(const std::string& line);
 };

@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -30,7 +30,8 @@
   #include <X11/X.h>
   #include <X11/Xlib.h>
   #include <GL/glx.h>
-#elif defined(_WIN32) && defined(HAS_DX)
+  #include "guilib/DispResource.h"
+#elif defined(TARGET_WINDOWS) && defined(HAS_DX)
   #include <d3d9.h>
   #include "guilib/D3DResource.h"
 
@@ -56,23 +57,32 @@ class CD3DCallback : public ID3DResource
 #endif
 
 class CVideoReferenceClock : public CThread
+#if defined(HAS_GLX) && defined(HAS_XRANDR)
+                            ,public IDispResource
+#endif
 {
   public:
     CVideoReferenceClock();
+    virtual ~CVideoReferenceClock();
 
     int64_t GetTime(bool interpolated = true);
     int64_t GetFrequency();
     void    SetSpeed(double Speed);
     double  GetSpeed();
-    int     GetRefreshRate(double* interval = NULL);
+    double  GetRefreshRate(double* interval = NULL);
     int64_t Wait(int64_t Target);
     bool    WaitStarted(int MSecs);
-    bool    GetClockInfo(int& MissedVblanks, double& ClockSpeed, int& RefreshRate);
+    bool    GetClockInfo(int& MissedVblanks, double& ClockSpeed, double& RefreshRate);
     void    SetFineAdjust(double fineadjust);
     void    RefreshChanged() { m_RefreshChanged = 1; }
 
 #if defined(TARGET_DARWIN)
     void VblankHandler(int64_t nowtime, double fps);
+#endif
+
+#if defined(HAS_GLX) && defined(HAS_XRANDR)
+    virtual void OnLostDevice();
+    virtual void OnResetDevice();
 #endif
 
   private:
@@ -93,7 +103,7 @@ class CVideoReferenceClock : public CThread
     double  m_fineadjust;
 
     bool    m_UseVblank;         //set to true when vblank is used as clock source
-    int64_t m_RefreshRate;       //current refreshrate
+    double  m_RefreshRate;       //current refreshrate
     int     m_PrevRefreshRate;   //previous refreshrate, used for log printing and getting refreshrate from nvidia-settings
     int     m_MissedVblanks;     //number of clock updates missed by the vblank clock
     int     m_RefreshChanged;    //1 = we changed the refreshrate, 2 = we should check the refreshrate forced
@@ -109,8 +119,6 @@ class CVideoReferenceClock : public CThread
     bool SetupGLX();
     void RunGLX();
     void CleanupGLX();
-    bool ParseNvSettings(int& RefreshRate);
-    int  GetRandRRate();
 
     int  (*m_glXWaitVideoSyncSGI) (int, int, unsigned int*);
     int  (*m_glXGetVideoSyncSGI)  (unsigned int*);
@@ -119,14 +127,10 @@ class CVideoReferenceClock : public CThread
     XVisualInfo *m_vInfo;
     Window       m_Window;
     GLXContext   m_Context;
-    Pixmap       m_pixmap;
-    GLXPixmap    m_glPixmap;
-    int          m_RREventBase;
+    bool         m_xrrEvent;
+    CEvent       m_releaseEvent, m_resetEvent;
 
-    bool         m_UseNvSettings;
-    bool         m_bIsATI;
-
-#elif defined(_WIN32) && defined(HAS_DX)
+#elif defined(TARGET_WINDOWS) && defined(HAS_DX)
     bool   SetupD3D();
     double MeasureRefreshrate(int MSecs);
     void   RunD3D();

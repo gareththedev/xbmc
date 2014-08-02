@@ -1,9 +1,7 @@
 @ECHO OFF
+SETLOCAL ENABLEDELAYEDEXPANSION
 rem ----Usage----
-rem BuildSetup [gl|dx] [clean|noclean]
-rem vs2010 for compiling with visual studio 2010
-rem gl for opengl build (default)
-rem dx for directx build
+rem BuildSetup [clean|noclean]
 rem clean to force a full rebuild
 rem noclean to force a build without clean
 rem noprompt to avoid all prompts
@@ -18,8 +16,6 @@ rem Config
 rem If you get an error that Visual studio was not found, SET your path for VSNET main executable.
 rem -------------------------------------------------------------
 rem	CONFIG START
-SET comp=vs2010
-SET target=dx
 SET buildmode=ask
 SET promptlevel=prompt
 SET buildmingwlibs=true
@@ -27,46 +23,38 @@ SET exitcode=0
 SET useshell=rxvt
 SET BRANCH=na
 FOR %%b in (%1, %2, %3, %4, %5) DO (
-	IF %%b==vs2010 SET comp=vs2010
-	IF %%b==dx SET target=dx
-	IF %%b==gl SET target=gl
 	IF %%b==clean SET buildmode=clean
 	IF %%b==noclean SET buildmode=noclean
 	IF %%b==noprompt SET promptlevel=noprompt
 	IF %%b==nomingwlibs SET buildmingwlibs=false
-    IF %%b==sh SET useshell=sh
+	IF %%b==sh SET useshell=sh
 )
 
-SET buildconfig=Release (DirectX)
-IF %target%==gl SET buildconfig=Release (OpenGL)
+SET buildconfig=Release
+set WORKSPACE=%CD%\..\..
 
-IF %comp%==vs2010 (
-  IF "%VS100COMNTOOLS%"=="" (
-		set NET="%ProgramFiles%\Microsoft Visual Studio 10.0\Common7\IDE\VCExpress.exe"
-	) ELSE IF EXIST "%VS100COMNTOOLS%\..\IDE\VCExpress.exe" (
-		set NET="%VS100COMNTOOLS%\..\IDE\VCExpress.exe"
-	) ELSE IF EXIST "%VS100COMNTOOLS%\..\IDE\devenv.exe" (
-		set NET="%VS100COMNTOOLS%\..\IDE\devenv.exe"
-	)
-)
+
+  REM look for MSBuild.exe delivered with Visual Studio 2013
+  FOR /F "tokens=2,* delims= " %%A IN ('REG QUERY HKLM\SOFTWARE\Microsoft\MSBuild\ToolsVersions\12.0 /v MSBuildToolsRoot') DO SET MSBUILDROOT=%%B
+  SET NET="%MSBUILDROOT%12.0\bin\MSBuild.exe"
+
+  IF EXIST "!NET!" (
+	set msbuildemitsolution=1
+	set OPTS_EXE="..\VS2010Express\XBMC for Windows.sln" /t:Build /p:Configuration="%buildconfig%" /property:VCTargetsPath="%MSBUILDROOT%Microsoft.Cpp\v4.0\V120"
+	set CLEAN_EXE="..\VS2010Express\XBMC for Windows.sln" /t:Clean /p:Configuration="%buildconfig%" /property:VCTargetsPath="%MSBUILDROOT%Microsoft.Cpp\v4.0\V120"
+  )
 
   IF NOT EXIST %NET% (
-     set DIETEXT=Visual Studio .NET 2010 Express was not found.
-	 goto DIE
+    set DIETEXT=MSBuild was not found.
+	goto DIE
   )
   
-  set OPTS_EXE="..\VS2010Express\XBMC for Windows.sln" /build "%buildconfig%"
-  set CLEAN_EXE="..\VS2010Express\XBMC for Windows.sln" /clean "%buildconfig%"
   set EXE= "..\VS2010Express\XBMC\%buildconfig%\XBMC.exe"
   set PDB= "..\VS2010Express\XBMC\%buildconfig%\XBMC.pdb"
   
-  :: when building with jenkins there's no branch. First git command gets the branch even there
-  :: but is empty in a normal build environment. Second git command gets the branch there.
-  for /f "tokens=3 delims=/" %%a in ('git branch -r --contains HEAD') do set BRANCH=%%a
-  IF %BRANCH%==na (
-    for /f "tokens=* delims= " %%a in ('git rev-parse --abbrev-ref HEAD') do set BRANCH=%%a
-  )
-	
+  :: sets the BRANCH env var
+  call getbranch.bat
+
   rem	CONFIG END
   rem -------------------------------------------------------------
 
@@ -93,27 +81,50 @@ IF %comp%==vs2010 (
 
 :EXE_COMPILE
   IF EXIST buildlog.html del buildlog.html /q
-  IF %buildmode%==clean goto COMPILE_EXE
-  IF %buildmode%==noclean goto COMPILE_NO_CLEAN_EXE
+  IF NOT %buildmode%==ask goto COMPILE_MINGW
+  IF %promptlevel%==noprompt goto COMPILE_MINGW
   rem ---------------------------------------------
   rem	check for existing exe
   rem ---------------------------------------------
+  set buildmode=clean
   
-  IF EXIST %EXE% (
-    goto EXE_EXIST
-  )
-  goto COMPILE_EXE
-
-:EXE_EXIST
-  IF %promptlevel%==noprompt goto COMPILE_EXE
+  IF NOT EXIST %EXE% goto COMPILE_MINGW
+  
   ECHO ------------------------------------------------------------
   ECHO Found a previous Compiled WIN32 EXE!
   ECHO [1] a NEW EXE will be compiled for the BUILD_WIN32
   ECHO [2] existing EXE will be updated (quick mode compile) for the BUILD_WIN32
   ECHO ------------------------------------------------------------
   set /P XBMC_COMPILE_ANSWER=Compile a new EXE? [1/2]:
-  if /I %XBMC_COMPILE_ANSWER% EQU 1 goto COMPILE_EXE
-  if /I %XBMC_COMPILE_ANSWER% EQU 2 goto COMPILE_NO_CLEAN_EXE
+  if /I %XBMC_COMPILE_ANSWER% EQU 1 set buildmode=clean
+  if /I %XBMC_COMPILE_ANSWER% EQU 2 set buildmode=noclean
+
+  goto COMPILE_MINGW
+  
+
+:COMPILE_MINGW
+  ECHO Buildmode = %buildmode%
+  IF %buildmingwlibs%==true (
+    ECHO Compiling mingw libs
+    ECHO bla>noprompt
+    IF EXIST errormingw del errormingw > NUL
+	IF %buildmode%==clean (
+	  ECHO bla>makeclean
+	)
+    rem only use sh to please jenkins
+    IF %useshell%==sh (
+      call ..\..\tools\buildsteps\win32\make-mingwlibs.bat sh noprompt
+    ) ELSE (
+      call ..\..\tools\buildsteps\win32\make-mingwlibs.bat noprompt
+    )
+    IF EXIST errormingw (
+    	set DIETEXT="failed to build mingw libs"
+    	goto DIE
+    )
+  )
+  IF %buildmode%==clean goto COMPILE_EXE
+  goto COMPILE_NO_CLEAN_EXE
+  
   
 :COMPILE_EXE
   ECHO Wait while preparing the build.
@@ -122,7 +133,7 @@ IF %comp%==vs2010 (
   %NET% %CLEAN_EXE%
   ECHO Compiling XBMC branch %BRANCH%...
   %NET% %OPTS_EXE%
-  IF NOT EXIST %EXE% (
+  IF %errorlevel%==1 (
   	set DIETEXT="XBMC.EXE failed to build!  See %CD%\..\vs2010express\XBMC\%buildconfig%\objs\XBMC.log"
 	IF %promptlevel%==noprompt (
 		type "%CD%\..\vs2010express\XBMC\%buildconfig%\objs\XBMC.log"
@@ -139,7 +150,7 @@ IF %comp%==vs2010 (
   ECHO ------------------------------------------------------------
   ECHO Compiling XBMC branch %BRANCH%...
   %NET% %OPTS_EXE%
-  IF NOT EXIST %EXE% (
+  IF %errorlevel%==1 (
   	set DIETEXT="XBMC.EXE failed to build!  See %CD%\..\vs2010express\XBMC\%buildconfig%\objs\XBMC.log"
 	IF %promptlevel%==noprompt (
 		type "%CD%\..\vs2010express\XBMC\%buildconfig%\objs\XBMC.log"
@@ -151,54 +162,44 @@ IF %comp%==vs2010 (
   GOTO MAKE_BUILD_EXE
 
 :MAKE_BUILD_EXE
-  IF %buildmingwlibs%==true (
-    ECHO Compiling mingw libs
-    ECHO bla>noprompt
-    IF EXIST errormingw del errormingw > NUL
-	IF %buildmode%==clean (
-	  ECHO bla>makeclean
-	)
-    rem only use sh to please jenkins
-    IF %useshell%==sh (
-      call buildmingwlibs.bat sh
-    ) ELSE (
-      call buildmingwlibs.bat
-    )
-    IF EXIST errormingw (
-    	set DIETEXT="failed to build mingw libs"
-    	goto DIE
-    )
-  )
-  
   ECHO Copying files...
   IF EXIST BUILD_WIN32 rmdir BUILD_WIN32 /S /Q
-
-  Echo .svn>exclude.txt
-  Echo CVS>>exclude.txt
+  rem Add files to exclude.txt that should not be included in the installer
+  
   Echo Thumbs.db>>exclude.txt
   Echo Desktop.ini>>exclude.txt
   Echo dsstdfx.bin>>exclude.txt
   Echo exclude.txt>>exclude.txt
-  rem and exclude potential leftovers
-  Echo mediasources.xml>>exclude.txt
-  Echo advancedsettings.xml>>exclude.txt
-  Echo guisettings.xml>>exclude.txt
-  Echo profiles.xml>>exclude.txt
-  Echo sources.xml>>exclude.txt
+  Echo xbmc.log>>exclude.txt
+  Echo xbmc.old.log>>exclude.txt
+  rem Exclude userdata files
+  Echo userdata\advancedsettings.xml>>exclude.txt
+  Echo userdata\guisettings.xml>>exclude.txt
+  Echo userdata\mediasources.xml>>exclude.txt
+  Echo userdata\passwords.xml>>exclude.txt
+  Echo userdata\profiles.xml>>exclude.txt
+  Echo userdata\sources.xml>>exclude.txt
+  Echo userdata\upnpserver.xml>>exclude.txt
+  rem Exclude userdata folders
+  Echo userdata\addon_data\>>exclude.txt
   Echo userdata\cache\>>exclude.txt
   Echo userdata\database\>>exclude.txt
   Echo userdata\playlists\>>exclude.txt
-  Echo userdata\script_data\>>exclude.txt
   Echo userdata\thumbnails\>>exclude.txt
-  rem UserData\visualisations contains currently only xbox visualisationfiles
-  Echo userdata\visualisations\>>exclude.txt
-  rem other platform stuff
-  Echo lib-osx>>exclude.txt
-  Echo players\mplayer>>exclude.txt
-  Echo FileZilla Server.xml>>exclude.txt
-  Echo asound.conf>>exclude.txt
-  Echo voicemasks.xml>>exclude.txt
-  Echo Lircmap.xml>>exclude.txt
+  rem Exclude non Windows addons
+  Echo addons\repository.pvr-android.xbmc.org\>>exclude.txt
+  Echo addons\repository.pvr-ios.xbmc.org\>>exclude.txt
+  Echo addons\repository.pvr-osx32.xbmc.org\>>exclude.txt
+  Echo addons\repository.pvr-osx64.xbmc.org\>>exclude.txt
+  Echo addons\screensaver.rsxs.euphoria\>>exclude.txt
+  Echo addons\screensaver.rsxs.plasma\>>exclude.txt
+  Echo addons\screensaver.rsxs.solarwinds\>>exclude.txt
+  Echo addons\visualization.fishbmc\>>exclude.txt
+  Echo addons\visualization.projectm\>>exclude.txt
+  Echo addons\visualization.glspectrum\>>exclude.txt
+  rem Exclude skins as they're copied by their own script
+  Echo addons\skin.touched\>>exclude.txt
+  Echo addons\skin.confluence\>>exclude.txt
   
   md BUILD_WIN32\Xbmc
 
@@ -208,7 +209,6 @@ IF %comp%==vs2010 (
   copy ..\..\LICENSE.GPL BUILD_WIN32\Xbmc > NUL
   copy ..\..\known_issues.txt BUILD_WIN32\Xbmc > NUL
   xcopy dependencies\*.* BUILD_WIN32\Xbmc /Q /I /Y /EXCLUDE:exclude.txt  > NUL
-  copy sources.xml BUILD_WIN32\Xbmc\userdata > NUL
   
   xcopy ..\..\language BUILD_WIN32\Xbmc\language /E /Q /I /Y /EXCLUDE:exclude.txt  > NUL
   xcopy ..\..\addons BUILD_WIN32\Xbmc\addons /E /Q /I /Y /EXCLUDE:exclude.txt > NUL
@@ -217,15 +217,39 @@ IF %comp%==vs2010 (
   xcopy ..\..\sounds BUILD_WIN32\Xbmc\sounds /E /Q /I /Y /EXCLUDE:exclude.txt  > NUL
   
   ECHO ------------------------------------------------------------
-  call buildpvraddons.bat %NET%
+  call buildpvraddons.bat
+  IF %errorlevel%==1 (
+    set DIETEXT="failed to build pvr addons"
+    goto DIE
+  )
     
   IF EXIST error.log del error.log > NUL
   SET build_path=%CD%
+  ECHO ------------------------------------------------------------
+  ECHO Building addons...
+  cd ..\..\tools\buildsteps\win32
+  call make-addons.bat
+  IF %errorlevel%==1 (
+    set DIETEXT="failed to build addons"
+    cd %build_path%
+    goto DIE
+  )
+
+  cd %build_path%
+  IF EXIST error.log del error.log > NUL
   ECHO ------------------------------------------------------------
   ECHO Building Confluence Skin...
   cd ..\..\addons\skin.confluence
   call build.bat > NUL
   cd %build_path%
+  
+  IF EXIST  ..\..\addons\skin.touched\build.bat (
+    ECHO Building Touched Skin...
+    cd ..\..\addons\skin.touched
+    call build.bat > NUL
+    cd %build_path%
+  )
+  
   rem restore color and title, some scripts mess these up
   COLOR 1B
   TITLE XBMC for Windows Build Script
@@ -309,6 +333,7 @@ IF %comp%==vs2010 (
   echo %DIETEXT%
   SET exitcode=1
   ECHO ------------------------------------------------------------
+  GOTO END
 
 :VIEWLOG_EXE
   SET log="%CD%\..\vs2010express\XBMC\%buildconfig%\objs\XBMC.log"

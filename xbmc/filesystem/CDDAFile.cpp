@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -50,18 +50,16 @@ CFileCDDA::~CFileCDDA(void)
 
 bool CFileCDDA::Open(const CURL& url)
 {
-  CStdString strURL = url.GetWithoutFilename();
+  std::string strURL = url.GetWithoutFilename();
 
   if (!g_mediaManager.IsDiscInDrive(strURL) || !IsValidFile(url))
     return false;
 
   // Open the dvd drive
-#ifdef _LINUX
-  m_pCdIo = m_cdio->cdio_open(g_mediaManager.TranslateDevicePath(strURL), DRIVER_UNKNOWN);
-#elif defined(_WIN32)
-  m_pCdIo = m_cdio->cdio_open_win32(g_mediaManager.TranslateDevicePath(strURL, true));
-#else
-  m_pCdIo = m_cdio->cdio_open_win32("D:");
+#ifdef TARGET_POSIX
+  m_pCdIo = m_cdio->cdio_open(g_mediaManager.TranslateDevicePath(strURL).c_str(), DRIVER_UNKNOWN);
+#elif defined(TARGET_WINDOWS)
+  m_pCdIo = m_cdio->cdio_open_win32(g_mediaManager.TranslateDevicePath(strURL, true).c_str());
 #endif
   if (!m_pCdIo)
   {
@@ -218,16 +216,12 @@ int64_t CFileCDDA::GetLength()
 bool CFileCDDA::IsValidFile(const CURL& url)
 {
   // Only .cdda files are supported
-  CStdString strExtension;
-  URIUtils::GetExtension(url.Get(), strExtension);
-  strExtension.MakeLower();
-
-  return (strExtension == ".cdda");
+  return URIUtils::HasExtension(url.Get(), ".cdda");
 }
 
 int CFileCDDA::GetTrackNum(const CURL& url)
 {
-  CStdString strFileName = url.Get();
+  std::string strFileName = url.Get();
 
   // get track number from "cdda://local/01.cdda"
   return atoi(strFileName.substr(13, strFileName.size() - 13 - 5).c_str());

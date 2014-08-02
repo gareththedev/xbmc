@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2010-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -50,9 +50,6 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-// objc-runtime.h is missing from iPhoneOS4.2SDK but present in iPhoneSimulator4.2.sdk
-// pull it from runtime system for now
-#import "/usr/include/objc/objc-runtime.h"
 
 #import "XBMCAppliance.h"
 #import "XBMCController.h"

@@ -21,7 +21,6 @@
   #define __STDC_LIMIT_MACROS
 #endif
 
-#include "utils/StdString.h"
 #include "AEUtil.h"
 #include "utils/log.h"
 #include "utils/TimeUtils.h"
@@ -30,10 +29,27 @@ using namespace std;
 
 /* declare the rng seed and initialize it */
 unsigned int CAEUtil::m_seed = (unsigned int)(CurrentHostCounter() / 1000.0f);
-#ifdef __SSE__
+#ifdef __SSE2__
   /* declare the SSE seed and initialize it */
   MEMALIGN(16, __m128i CAEUtil::m_sseSeed) = _mm_set_epi32(CAEUtil::m_seed, CAEUtil::m_seed+1, CAEUtil::m_seed, CAEUtil::m_seed+1);
 #endif
+
+void   AEDelayStatus::SetDelay(double d)
+{
+  delay = d;
+  tick  = CurrentHostCounter();
+}
+
+double AEDelayStatus::GetDelay()
+{
+  double d = delay;
+  if(tick)
+    d -= (double)(CurrentHostCounter() - tick) / CurrentHostFrequency();
+  if(d < 0)
+    return 0.0;
+  else
+    return d;
+}
 
 CAEChannelInfo CAEUtil::GuessChLayout(const unsigned int channels)
 {
@@ -82,37 +98,63 @@ const unsigned int CAEUtil::DataFormatToBits(const enum AEDataFormat dataFormat)
   static const unsigned int formats[AE_FMT_MAX] =
   {
     8,                   /* U8     */
-    8,                   /* S8     */
 
     16,                  /* S16BE  */
     16,                  /* S16LE  */
     16,                  /* S16NE  */
-
+    
     32,                  /* S32BE  */
     32,                  /* S32LE  */
     32,                  /* S32NE  */
-
+    
     32,                  /* S24BE  */
     32,                  /* S24LE  */
     32,                  /* S24NE  */
-
+    32,                  /* S24NER */
+    
     24,                  /* S24BE3 */
     24,                  /* S24LE3 */
     24,                  /* S24NE3 */
-
+    
     sizeof(double) << 3, /* DOUBLE */
     sizeof(float ) << 3, /* FLOAT  */
-
+    
     16,                  /* AAC    */
     16,                  /* AC3    */
     16,                  /* DTS    */
     16,                  /* EAC3   */
     16,                  /* TRUEHD */
     16,                  /* DTS-HD */
-    32                   /* LPCM   */
-  };
+    32,                  /* LPCM   */
+
+     8,                  /* U8P    */
+    16,                  /* S16NEP */
+    32,                  /* S32NEP */
+    32,                  /* S24NEP */
+    32,                  /* S24NERP*/
+    24,                  /* S24NE3P*/
+    sizeof(double) << 3, /* DOUBLEP */
+    sizeof(float ) << 3  /* FLOATP  */
+ };
 
   return formats[dataFormat];
+}
+
+const unsigned int CAEUtil::DataFormatToUsedBits(const enum AEDataFormat dataFormat)
+{
+  if (dataFormat == AE_FMT_S24BE4 || dataFormat == AE_FMT_S24LE4 ||
+      dataFormat == AE_FMT_S24NE4 || dataFormat == AE_FMT_S24NE4MSB)
+    return 24;
+  else
+    return DataFormatToBits(dataFormat);
+}
+
+const unsigned int CAEUtil::DataFormatToDitherBits(const enum AEDataFormat dataFormat)
+{
+  if (dataFormat == AE_FMT_S24NE4MSB)
+    return 8;
+  else
+    return 0;
 }
 
 const char* CAEUtil::DataFormatToStr(const enum AEDataFormat dataFormat)
@@ -123,27 +165,27 @@ const char* CAEUtil::DataFormatToStr(const enum AEDataFormat dataFormat)
   static const char *formats[AE_FMT_MAX] =
   {
     "AE_FMT_U8",
-    "AE_FMT_S8",
 
     "AE_FMT_S16BE",
     "AE_FMT_S16LE",
     "AE_FMT_S16NE",
-
+    
     "AE_FMT_S32BE",
     "AE_FMT_S32LE",
     "AE_FMT_S32NE",
-
+    
     "AE_FMT_S24BE4",
     "AE_FMT_S24LE4",
     "AE_FMT_S24NE4",  /* S24 in 4 bytes */
-
+    "AE_FMT_S24NE4MSB",
+    
     "AE_FMT_S24BE3",
     "AE_FMT_S24LE3",
     "AE_FMT_S24NE3", /* S24 in 3 bytes */
-
+    
     "AE_FMT_DOUBLE",
     "AE_FMT_FLOAT",
-
+    
     /* for passthrough streams and the like */
     "AE_FMT_AAC",
     "AE_FMT_AC3",
@@ -151,7 +193,17 @@ const char* CAEUtil::DataFormatToStr(const enum AEDataFormat dataFormat)
     "AE_FMT_EAC3",
     "AE_FMT_TRUEHD",
     "AE_FMT_DTSHD",
-    "AE_FMT_LPCM"
+    "AE_FMT_LPCM",
+
+    /* planar formats */
+    "AE_FMT_U8P",
+    "AE_FMT_S16NEP",
+    "AE_FMT_S32NEP",
+    "AE_FMT_S24NE4P",
+    "AE_FMT_S24NE4MSBP",
+    "AE_FMT_S24NE3P",
+    "AE_FMT_DOUBLEP",
+    "AE_FMT_FLOATP"
   };
 
   return formats[dataFormat];
@@ -386,7 +438,7 @@ float CAEUtil::FloatRand1(const float min, const float max)
 
 void CAEUtil::FloatRand4(const float min, const float max, float result[4], __m128 *sseresult/* = NULL */)
 {
-  #ifdef __SSE__
+  #ifdef __SSE2__
     /*
       this method may be called from other SSE code, we need
       to calculate the delta & factor using SSE as the FPU
@@ -447,7 +499,7 @@ void CAEUtil::FloatRand4(const float min, const float max, float result[4], __m1
     const float factor = delta / (float)INT32_MAX;
 
     /* cant return sseresult if we are not using SSE intrinsics */
-    ASSERT(result && !sseresult);
+    assert(result && !sseresult);
 
     result[0] = ((float)(m_seed = (214013 * m_seed + 2531011)) * factor) - delta;
     result[1] = ((float)(m_seed = (214013 * m_seed + 2531011)) * factor) - delta;

@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,9 +20,8 @@
  *
  */
 
+#include <string>
 #include <vector>
-
-#include "utils/StdString.h"
 
 #define DIFFRINGSIZE 120
 
@@ -48,8 +47,8 @@ class CPullupCorrection
     void GetPattern(std::vector<double>& pattern);     //gets the current pattern
     void GetDifftypes(std::vector<double>& difftypes); //gets the difftypes from the ringbuffer
 
-    bool MatchDiff(double diff1, double diff2); //checks if two diffs match by MAXERR
-    bool MatchDifftype(int* diffs1, int* diffs2, int nrdiffs); //checks if the difftypes match
+    static bool MatchDiff(double diff1, double diff2); //checks if two diffs match by MAXERR
+    static bool MatchDifftype(int* diffs1, int* diffs2, int nrdiffs); //checks if the difftypes match
 
     //builds a pattern of timestamps in the ringbuffer
     void BuildPattern(std::vector<double>& pattern, int patternlength);
@@ -66,5 +65,5 @@ class CPullupCorrection
     double m_frameduration;        //frameduration exposed to dvdplayer, used for calculating the fps
     bool   m_haspattern;           //for the log
     int    m_patternlength;        //for the codec info
-    CStdString GetPatternStr();    //also for the log
+    std::string GetPatternStr();    //also for the log
 };

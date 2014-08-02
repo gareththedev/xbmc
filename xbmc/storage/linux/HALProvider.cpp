@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -70,12 +70,12 @@ void CHALProvider::GetRemovableDrives(VECSOURCES &removableDrives)
   }
 }
 
-bool CHALProvider::Eject(CStdString mountpath)
+bool CHALProvider::Eject(const std::string& mountpath)
 {
   return g_HalManager.Eject(mountpath);
 }
 
-std::vector<CStdString> CHALProvider::GetDiskUsage()
+std::vector<std::string> CHALProvider::GetDiskUsage()
 {
   CPosixMountProvider legacy;
   return legacy.GetDiskUsage();

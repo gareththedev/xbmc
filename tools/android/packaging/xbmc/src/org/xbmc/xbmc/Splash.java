@@ -3,17 +3,22 @@ package org.xbmc.xbmc;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Enumeration;
+import java.lang.System;
+import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import java.util.Properties;
+import java.util.Enumeration;
 
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.app.Activity;
 import android.app.ActivityManager;
@@ -28,19 +33,16 @@ import android.text.method.LinkMovementMethod;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.content.res.Resources;
+import android.content.res.Resources.NotFoundException;
 
 public class Splash extends Activity {
-
-  static
-  {
-    System.loadLibrary("xbmc");
-  }
 
   public enum State {
     Uninitialized, InError, Checking, Caching, StartingXBMC
   }
 
-  private static final String TAG = "Splash";
+  private static final String TAG = "XBMC";
 
   private String mCpuinfo = "";
   private String mErrorMsg = "";
@@ -50,10 +52,10 @@ public class Splash extends Activity {
   private State mState = State.Uninitialized;
   public AlertDialog myAlertDialog;
 
-  private String sPackagePath;
-  private String sApkDir;
-  private File fPackagePath;
-  private File fApkDir;
+  private String sPackagePath = "";
+  private String sXbmcHome = "";
+  private File fPackagePath = null;
+  private File fXbmcHome = null;
 
   public void showErrorDialog(Context context, String title, String message) {
     if (myAlertDialog != null && myAlertDialog.isShowing())
@@ -89,12 +91,25 @@ public class Splash extends Activity {
       this.mSplash = splash;
     }
 
+    void DeleteRecursive(File fileOrDirectory) {
+      if (fileOrDirectory.isDirectory())
+        for (File child : fileOrDirectory.listFiles())
+          DeleteRecursive(child);
+
+      fileOrDirectory.delete();
+    }
+
     @Override
     protected Integer doInBackground(Void... param) {
-      fApkDir.mkdirs();
+      if (fXbmcHome.exists()) {
+        // Remove existing files
+        Log.d(TAG, "Removing existing " + fXbmcHome.toString());
+        DeleteRecursive(fXbmcHome);
+      }
+      fXbmcHome.mkdirs();
 
       // Log.d(TAG, "apk: " + sPackagePath);
-      // Log.d(TAG, "output: " + sApkDir);
+      // Log.d(TAG, "output: " + sXbmcHome);
 
       ZipFile zip;
       byte[] buf = new byte[4096];
@@ -118,7 +133,7 @@ public class Splash extends Activity {
           if (e.getName().startsWith("assets/python2.6"))
             continue;
 
-          String sFullPath = sApkDir + "/" + e.getName();
+          String sFullPath = sXbmcHome + "/" + e.getName();
           File fFullPath = new File(sFullPath);
           if (e.isDirectory()) {
             // Log.d(TAG, "creating dir: " + sFullPath);
@@ -126,15 +141,6 @@ public class Splash extends Activity {
             continue;
           }
 
-          // Log.d(TAG,
-          // "time: " + e.getTime() + ";"
-          // + fFullPath.lastModified());
-
-          // If file exists and has same time, skip
-          if (e.getTime() == fFullPath.lastModified())
-            continue;
-
-          // Log.d(TAG, "writing: " + sFullPath);
           fFullPath.getParentFile().mkdirs();
 
           try {
@@ -146,11 +152,6 @@ public class Splash extends Activity {
 
             in.close();
             out.close();
-
-            // save the zip time. this way we know for certain
-            // if we
-            // need to refresh.
-            fFullPath.setLastModified(e.getTime());
           } catch (IOException e1) {
             e1.printStackTrace();
           }
@@ -158,7 +159,7 @@ public class Splash extends Activity {
 
         zip.close();
 
-        fApkDir.setLastModified(fPackagePath.lastModified());
+        fXbmcHome.setLastModified(fPackagePath.lastModified());
 
       } catch (FileNotFoundException e1) {
         e1.printStackTrace();
@@ -207,6 +208,45 @@ public class Splash extends Activity {
     }
   }
 
+  private void SetupEnvironment() {
+    File fProp = new File("/sdcard/xbmc_env.properties");
+    if (fProp.exists()) {
+      try {
+        Properties sysProp = new Properties(System.getProperties());
+        FileInputStream xbmcenvprop = new FileInputStream(fProp);
+        sysProp.load(xbmcenvprop);
+        System.setProperties(sysProp);
+
+        sXbmcHome = System.getProperty("xbmc.home", "");
+        fXbmcHome = new File(sXbmcHome);
+        fXbmcHome.mkdir();
+        if (!fXbmcHome.exists())
+          sXbmcHome = "";
+
+        String sXbmcdata = System.getProperty("xbmc.data", "");
+        if (!sXbmcdata.isEmpty()) {
+          File fXbmcData = new File(sXbmcdata);
+          fXbmcData.mkdir();
+          if (!fXbmcData.exists())
+            sXbmcdata = "";
+        }
+
+      } catch (NotFoundException e) {
+        Log.e(TAG, "Cannot find xbmc_env properties file");
+      } catch (IOException e) {
+        Log.e(TAG, "Failed to open xbmc_env properties file");
+      }
+    }
+    if (sXbmcHome.isEmpty()) {
+      File fCacheDir = getCacheDir();
+      sXbmcHome = fCacheDir.getAbsolutePath() + "/apk";
+    }
+
+    sPackagePath = getPackageResourcePath();
+    fPackagePath = new File(sPackagePath);
+    fXbmcHome = new File(sXbmcHome);
+  }
+
   private boolean ParseCpuFeature() {
     ProcessBuilder cmd;
 
@@ -236,8 +276,12 @@ public class Splash extends Activity {
   }
 
   protected void startXBMC() {
+    // NB: We only preload libxbmc to be able to get info on missing symbols.
+    //     This is not normally needed
+    System.loadLibrary("xbmc");
+    
     // Run XBMC
-    Intent intent = new Intent();
+    Intent intent = getIntent();
     intent.setClass(this, org.xbmc.xbmc.Main.class);
     startActivity(intent);
     finish();
@@ -262,26 +306,65 @@ public class Splash extends Activity {
 
     mState = State.Checking;
 
-    boolean ret = ParseCpuFeature();
-    if (!ret) {
-      mErrorMsg = "Error! Cannot parse CPU features.";
+    String curArch = "";
+    try {
+      curArch = Build.CPU_ABI.substring(0,3);
+    } catch (IndexOutOfBoundsException e) {
+      mErrorMsg = "Error! Unexpected architecture: " + Build.CPU_ABI;
+      Log.e(TAG, mErrorMsg);
       mState = State.InError;
-    } else {
-      ret = CheckCpuFeature("neon");
-      if (!ret) {
-        mErrorMsg = "This XBMC package is not compatible with your device.\nPlease check the <a href=\"http://wiki.xbmc.org/index.php?title=XBMC_for_Android_specific_FAQ\">XBMC Android wiki</a> for more information.";
+   }
+    
+    if (mState != State.InError) {
+      // Check if we are on the proper arch
+
+      // Read the properties
+      try {
+        Resources resources = this.getResources();
+        InputStream xbmcprop = resources.openRawResource(R.raw.xbmc);
+        Properties properties = new Properties();
+        properties.load(xbmcprop);
+
+        if (!curArch.equalsIgnoreCase(properties.getProperty("native_arch"))) {
+          mErrorMsg = "This XBMC package is not compatible with your device (" + curArch + " vs. " + properties.getProperty("native_arch") +").\nPlease check the <a href=\"http://wiki.xbmc.org/index.php?title=XBMC_for_Android_specific_FAQ\">XBMC Android wiki</a> for more information.";
+          Log.e(TAG, mErrorMsg);
+          mState = State.InError;
+        }
+      } catch (NotFoundException e) {
+        mErrorMsg = "Cannot find properties file";
+        Log.e(TAG, mErrorMsg);
+        mState = State.InError;
+      } catch (IOException e) {
+        mErrorMsg = "Failed to open properties file";
+        Log.e(TAG, mErrorMsg);
         mState = State.InError;
       }
     }
+    
     if (mState != State.InError) {
-      sPackagePath = getPackageResourcePath();
-      fPackagePath = new File(sPackagePath);
-      File fCacheDir = getCacheDir();
-      sApkDir = fCacheDir.getAbsolutePath() + "/apk";
-      fApkDir = new File(sApkDir);
+      if (curArch.equalsIgnoreCase("arm")) {
+        // arm arch: check if the cpu supports neon
+        boolean ret = ParseCpuFeature();
+        if (!ret) {
+          mErrorMsg = "Error! Cannot parse CPU features.";
+          Log.e(TAG, mErrorMsg);
+          mState = State.InError;
+        } else {
+          ret = CheckCpuFeature("neon");
+          if (!ret) {
+            mErrorMsg = "This XBMC package is not compatible with your device (NEON).\nPlease check the <a href=\"http://wiki.xbmc.org/index.php?title=XBMC_for_Android_specific_FAQ\">XBMC Android wiki</a> for more information.";
+            Log.e(TAG, mErrorMsg);
+            mState = State.InError;
+          }
+        }
+      }
+    }
+    
+    if (mState != State.InError) {
+      SetupEnvironment();
 
-      if (fApkDir.exists()
-          && fApkDir.lastModified() >= fPackagePath.lastModified()) {
+      if (fXbmcHome.exists()
+          && fXbmcHome.lastModified() >= fPackagePath.lastModified()) {
         mState = State.StartingXBMC;
       }
     }

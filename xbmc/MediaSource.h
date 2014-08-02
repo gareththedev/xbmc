@@ -1,7 +1,7 @@
 #pragma once
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -41,12 +41,12 @@ public:
     SOURCE_TYPE_VPATH        = 5,
     SOURCE_TYPE_REMOVABLE    = 6
   };
-  CMediaSource() { m_iDriveType=SOURCE_TYPE_UNKNOWN; m_iLockMode=LOCK_MODE_EVERYONE; m_iBadPwdCount=0; m_iHasLock=0; m_ignore=false; };
+  CMediaSource() { m_iDriveType=SOURCE_TYPE_UNKNOWN; m_iLockMode=LOCK_MODE_EVERYONE; m_iBadPwdCount=0; m_iHasLock=0; m_ignore=false; m_allowSharing=true; };
   virtual ~CMediaSource() {};
 
   bool operator==(const CMediaSource &right) const;
 
-  void FromNameAndPaths(const CStdString &category, const CStdString &name, const std::vector<CStdString> &paths);
+  void FromNameAndPaths(const CStdString &category, const CStdString &name, const std::vector<std::string> &paths);
   bool IsWritable() const;
   CStdString strName; ///< Name of the share, can be choosen freely.
   CStdString strStatus; ///< Status of the share (eg has disk etc.)
@@ -96,8 +96,9 @@ public:
 
   CStdString m_strThumbnailImage; ///< Path to a thumbnail image for the share, or blank for default
 
-  std::vector<CStdString> vecPaths;
+  std::vector<std::string> vecPaths;
   bool m_ignore; /// <Do not store in xml
+  bool m_allowSharing; /// <Allow browsing of source from UPnP / WebServer
 };
 
 /*!

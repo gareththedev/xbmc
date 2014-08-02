@@ -9,13 +9,18 @@ SET DEPS_DIR=..\BuildDependencies
 SET TMP_DIR=%DEPS_DIR%\tmp
 
 SET LIBNAME=xbmc-pvr-addons
-SET VERSION=5ef7f7f88c9dd3ca9c1daf57e7c92c005faa5910
+SET VERSION=1832e602ce6d6ce43e2abbb497879beb944ab225
 SET SOURCE=%LIBNAME%
 SET GIT_URL=git://github.com/opdenkamp/%LIBNAME%.git
 SET SOURCE_DIR=%TMP_DIR%\%SOURCE%
 SET BUILT_ADDONS_DIR=%SOURCE_DIR%\addons
 
-set OPTS_EXE=%SOURCE_DIR%\project\VS2010Express\xbmc-pvr-addons.sln /build Release
+REM check if MSBuild.exe is used because it requires different command line switches
+IF "%msbuildemitsolution%" == "1" (
+  set OPTS_EXE=%SOURCE_DIR%\project\VS2010Express\xbmc-pvr-addons.sln /t:Build /p:Configuration="Release" /property:VCTargetsPath="%MSBUILDROOT%Microsoft.Cpp\v4.0\V120\\"
+) ELSE (
+  set OPTS_EXE=%SOURCE_DIR%\project\VS2010Express\xbmc-pvr-addons.sln /build Release
+)
 
 REM Try wrapped msysgit - must be in the path
 SET GITEXE=git.cmd
@@ -57,7 +62,11 @@ CD "%CUR_DIR%"
 
 REM build xbmc-pvr-addons.sln
 ECHO Building PVR addons
-%1 %OPTS_EXE%
+"%MSBUILDROOT%12.0\bin\MSBuild.exe" %OPTS_EXE%
+
+IF %errorlevel%==1 (
+  goto fail
+)
 
 REM copy the built pvr addons into ADDONS_DIR
 CD "%BUILT_ADDONS_DIR%"
@@ -84,6 +93,10 @@ GOTO done
 
 :error
 ECHO No git command available. Unable to fetch and build xbmc-pvr-addons.
+SET EXITCODE=1
+
+:fail
+ECHO Failed to build one or more pvr addons
 SET EXITCODE=1
 
 :done

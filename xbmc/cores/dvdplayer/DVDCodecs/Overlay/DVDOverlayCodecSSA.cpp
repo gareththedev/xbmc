@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 #include "DVDClock.h"
 #include "Util.h"
 #include "utils/AutoPtrHandle.h"
+#include "utils/StringUtils.h"
 
 using namespace AUTOPTR;
 using namespace std;
@@ -44,7 +45,7 @@ CDVDOverlayCodecSSA::~CDVDOverlayCodecSSA()
 
 bool CDVDOverlayCodecSSA::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 {
-  if(hints.codec != CODEC_ID_SSA)
+  if(hints.codec != AV_CODEC_ID_SSA)
     return false;
 
   Dispose();
@@ -69,7 +70,7 @@ int CDVDOverlayCodecSSA::Decode(DemuxPacket *pPacket)
     return OC_ERROR;
   
   double pts = pPacket->dts != DVD_NOPTS_VALUE ? pPacket->dts : pPacket->pts;
-  BYTE *data = pPacket->pData;
+  uint8_t *data = pPacket->pData;
   int size = pPacket->iSize;
   double duration = pPacket->duration;
   if(duration == DVD_NOPTS_VALUE)
@@ -80,13 +81,13 @@ int CDVDOverlayCodecSSA::Decode(DemuxPacket *pPacket)
     int    sh, sm, ss, sc, eh, em, es, ec;
     double beg, end;
     size_t pos;
-    CStdString      line, line2;
-    CStdStringArray lines;
-    CUtil::Tokenize((const char*)data, lines, "\r\n");
+    std::string      line, line2;
+    std::vector<std::string> lines;
+    StringUtils::Tokenize((const char*)data, lines, "\r\n");
     for(size_t i=0; i<lines.size(); i++)
     {
       line = lines[i];
-      line.Trim();
+      StringUtils::Trim(line);
       auto_aptr<char> layer(new char[line.length()+1]);
 
       if(sscanf(line.c_str(), "%*[^:]:%[^,],%d:%d:%d%*c%d,%d:%d:%d%*c%d"
@@ -99,10 +100,10 @@ int CDVDOverlayCodecSSA::Decode(DemuxPacket *pPacket)
       pos = line.find_first_of(",", 0);
       pos = line.find_first_of(",", pos+1);
       pos = line.find_first_of(",", pos+1);
-      if(pos == CStdString::npos)
+      if(pos == std::string::npos)
         continue;
 
-      line2.Format("%d,%s,%s", m_order++, layer.get(), line.Mid(pos+1));
+      line2 = StringUtils::Format("%d,%s,%s", m_order++, layer.get(), line.substr(pos+1).c_str());
 
       m_libass->DecodeDemuxPkt((char*)line2.c_str(), line2.length(), beg, end - beg);
 

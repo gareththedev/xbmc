@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -31,7 +31,6 @@
 // include as less is possible to prevent dependencies
 #include "system.h"
 #include "DVDDemuxers/DVDDemux.h"
-#include "DVDMessageTracker.h"
 #include "DVDResource.h"
 
 #include <assert.h>
@@ -98,17 +97,10 @@ public:
   CDVDMsg(Message msg)
   {
     m_message = msg;
-
-#ifdef DVDDEBUG_MESSAGE_TRACKER
-    g_dvdMessageTracker.Register(this);
-#endif
   }
 
   virtual ~CDVDMsg()
   {
-#ifdef DVDDEBUG_MESSAGE_TRACKER
-    g_dvdMessageTracker.UnRegister(this);
-#endif
   }
 
   /**
@@ -163,7 +155,7 @@ public:
 
   // waits until all threads waiting, released the object
   // if abort is set somehow
-  bool Wait(unsigned long  ms   , unsigned int source);
+  bool Wait(unsigned int   ms   , unsigned int source);
   void Wait(volatile bool *abort, unsigned int source);
 private:
   class CDVDMsgGeneralSynchronizePriv* m_p;
@@ -173,7 +165,7 @@ template <typename T>
 class CDVDMsgType : public CDVDMsg
 {
 public:
-  CDVDMsgType(Message type, T value)
+  CDVDMsgType(Message type, const T &value)
     : CDVDMsg(type)
     , m_value(value)
   {}
@@ -212,7 +204,7 @@ private:
 class CDVDMsgPlayerSetState : public CDVDMsg
 {
 public:
-  CDVDMsgPlayerSetState(std::string& state) : CDVDMsg(PLAYER_SET_STATE), m_state(state) {}
+  CDVDMsgPlayerSetState(const std::string& state) : CDVDMsg(PLAYER_SET_STATE), m_state(state) {}
   std::string GetState()                { return m_state; }
 private:
   std::string m_state;
@@ -320,7 +312,7 @@ public:
 class CDVDMsgSubtitleClutChange : public CDVDMsg
 {
 public:
-  CDVDMsgSubtitleClutChange(BYTE* data) : CDVDMsg(SUBTITLE_CLUTCHANGE) { memcpy(m_data, data, 16*4); }
-  BYTE m_data[16][4];
+  CDVDMsgSubtitleClutChange(uint8_t* data) : CDVDMsg(SUBTITLE_CLUTCHANGE) { memcpy(m_data, data, 16*4); }
+  uint8_t m_data[16][4];
 private:
 };

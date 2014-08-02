@@ -2,7 +2,7 @@
 
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,9 +20,12 @@
  *
  */
 
-#include "view/GUIViewState.h"
+#include <string>
+#include <vector>
+#include "guilib/GraphicContext.h" // for VIEW_TYPE
 
-#include "guilib/GUIBaseContainer.h"
+class CGUIControl;
+class CFileItemList;
 
 class CGUIViewControl
 {
@@ -40,7 +43,7 @@ public:
   void SetItems(CFileItemList &items);
 
   void SetSelectedItem(int item);
-  void SetSelectedItem(const CStdString &itemPath);
+  void SetSelectedItem(const std::string &itemPath);
 
   int GetSelectedItem() const;
   void SetFocused();
@@ -58,7 +61,7 @@ protected:
   int GetSelectedItem(const CGUIControl *control) const;
   void UpdateContents(const CGUIControl *control, int currentItem);
   void UpdateView();
-  void UpdateViewAsControl(const CStdString &viewLabel);
+  void UpdateViewAsControl(const std::string &viewLabel);
   void UpdateViewVisibility();
   int GetView(VIEW_TYPE type, int id) const;
 

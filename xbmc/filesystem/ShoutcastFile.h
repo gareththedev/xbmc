@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -26,7 +26,6 @@
 
 #include "IFile.h"
 #include "CurlFile.h"
-#include "utils/StdString.h"
 #include "music/tags/MusicInfoTag.h"
 #include "threads/Thread.h"
 
@@ -56,6 +55,7 @@ protected:
   void ReadTruncated(char* buf2, int size);
 
   CCurlFile m_file;
+  std::string m_fileCharset;
   int m_metaint;
   int m_discarded; // data used for tags
   int m_currint;

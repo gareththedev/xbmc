@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@
 
 #include "threads/SystemClock.h"
 #include "Stopwatch.h"
-#if defined(_LINUX) && !defined(TARGET_DARWIN) && !defined(__FreeBSD__)
+#if defined(TARGET_POSIX) && !defined(TARGET_DARWIN) && !defined(TARGET_FREEBSD)
 #include <sys/sysinfo.h>
 #endif
 #include "utils/TimeUtils.h"
@@ -32,19 +32,14 @@ CStopWatch::CStopWatch(bool useFrameTime /*=false*/)
   m_isRunning        = false;
   m_useFrameTime     = useFrameTime;
 
-  if (m_useFrameTime)
-  {
-    m_timerPeriod = 1.0f / 1000.0f; //frametime is in milliseconds
-  }
-  else
-  {
-  // Get the timer frequency (ticks per second)
-#ifndef _LINUX
-  m_timerPeriod = 1.0f / (float)CurrentHostFrequency();
-#else
+#ifdef TARGET_POSIX
   m_timerPeriod = 1.0f / 1000.0f; // we want seconds
+#else
+  if (m_useFrameTime)
+    m_timerPeriod = 1.0f / 1000.0f; //frametime is in milliseconds
+  else
+    m_timerPeriod = 1.0f / (float)CurrentHostFrequency();
 #endif
-  }
 }
 
 CStopWatch::~CStopWatch()
@@ -99,7 +94,7 @@ int64_t CStopWatch::GetTicks() const
 {
   if (m_useFrameTime)
     return CTimeUtils::GetFrameTime();
-#ifndef _LINUX
+#ifndef TARGET_POSIX
   return CurrentHostCounter();
 #else
   return XbmcThreads::SystemClockMillis();

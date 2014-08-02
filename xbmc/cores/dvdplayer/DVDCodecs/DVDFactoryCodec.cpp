@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,8 +25,9 @@
 #include "Video/DVDVideoCodec.h"
 #include "Audio/DVDAudioCodec.h"
 #include "Overlay/DVDOverlayCodec.h"
+#include "cores/dvdplayer/DVDCodecs/DVDCodecs.h"
 
-#if defined(HAVE_LIBVDADECODER)
+#if defined(TARGET_DARWIN_OSX)
 #include "Video/DVDVideoCodecVDA.h"
 #endif
 #if defined(HAVE_VIDEOTOOLBOXDECODER)
@@ -35,16 +36,19 @@
 #include "Video/DVDVideoCodecFFmpeg.h"
 #include "Video/DVDVideoCodecOpenMax.h"
 #include "Video/DVDVideoCodecLibMpeg2.h"
+#include "Video/DVDVideoCodecStageFright.h"
 #if defined(HAVE_LIBCRYSTALHD)
 #include "Video/DVDVideoCodecCrystalHD.h"
 #endif
-#include "Audio/DVDAudioCodecFFmpeg.h"
-#include "Audio/DVDAudioCodecLibMad.h"
-#include "Audio/DVDAudioCodecPcm.h"
-#include "Audio/DVDAudioCodecLPcm.h"
-#if defined(TARGET_DARWIN_OSX) || defined(TARGET_DARWIN_IOS)
-#include "Audio/DVDAudioCodecPassthroughFFmpeg.h"
+#if defined(HAS_LIBAMCODEC)
+#include "utils/AMLUtils.h"
+#include "Video/DVDVideoCodecAmlogic.h"
 #endif
+#if defined(TARGET_ANDROID)
+#include "Video/DVDVideoCodecAndroidMediaCodec.h"
+#include "android/activity/AndroidFeatures.h"
+#endif
+#include "Audio/DVDAudioCodecFFmpeg.h"
 #include "Audio/DVDAudioCodecPassthrough.h"
 #include "Overlay/DVDOverlayCodecSSA.h"
 #include "Overlay/DVDOverlayCodecText.h"
@@ -53,8 +57,9 @@
 
 
 #include "DVDStreamInfo.h"
-#include "settings/GUISettings.h"
+#include "settings/Settings.h"
 #include "utils/SystemInfo.h"
+#include "utils/StringUtils.h"
 
 CDVDVideoCodec* CDVDFactoryCodec::OpenCodec(CDVDVideoCodec* pCodec, CDVDStreamInfo &hints, CDVDCodecOptions &options )
 {
@@ -135,11 +140,9 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 
   //when support for a hardware decoder is not compiled in
   //only print it if it's actually available on the platform
-  CStdString hwSupport;
-#if defined(HAVE_LIBVDADECODER) && defined(TARGET_DARWIN)
+  std::string hwSupport;
+#if defined(TARGET_DARWIN_OSX)
   hwSupport += "VDADecoder:yes ";
-#elif defined(TARGET_DARWIN)
-  hwSupport += "VDADecoder:no ";
 #endif
 #if defined(HAVE_VIDEOTOOLBOXDECODER) && defined(TARGET_DARWIN)
   hwSupport += "VideoToolBoxDecoder:yes ";
@@ -151,56 +154,77 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 #else
   hwSupport += "CrystalHD:no ";
 #endif
-#if defined(HAVE_LIBOPENMAX) && defined(_LINUX)
+#if defined(HAS_LIBAMCODEC)
+  hwSupport += "AMCodec:yes ";
+#else
+  hwSupport += "AMCodec:no ";
+#endif
+#if defined(TARGET_ANDROID)
+  hwSupport += "MediaCodec:yes ";
+#else
+  hwSupport += "MediaCodec:no ";
+#endif
+#if defined(HAVE_LIBOPENMAX) && defined(TARGET_POSIX)
   hwSupport += "OpenMax:yes ";
-#elif defined(_LINUX)
+#elif defined(TARGET_POSIX)
   hwSupport += "OpenMax:no ";
 #endif
-#if defined(HAVE_LIBVDPAU) && defined(_LINUX)
+#if defined(HAS_LIBSTAGEFRIGHT)
+  hwSupport += "libstagefright:yes ";
+#elif defined(_LINUX)
+  hwSupport += "libstagefright:no ";
+#endif
+#if defined(HAVE_LIBVDPAU) && defined(TARGET_POSIX)
   hwSupport += "VDPAU:yes ";
-#elif defined(_LINUX) && !defined(TARGET_DARWIN)
+#elif defined(TARGET_POSIX) && !defined(TARGET_DARWIN)
   hwSupport += "VDPAU:no ";
 #endif
-#if defined(_WIN32) && defined(HAS_DX)
+#if defined(TARGET_WINDOWS) && defined(HAS_DX)
   hwSupport += "DXVA:yes ";
-#elif defined(_WIN32)
+#elif defined(TARGET_WINDOWS)
   hwSupport += "DXVA:no ";
 #endif
-#if defined(HAVE_LIBVA) && defined(_LINUX)
+#if defined(HAVE_LIBVA) && defined(TARGET_POSIX)
   hwSupport += "VAAPI:yes ";
-#elif defined(_LINUX) && !defined(TARGET_DARWIN)
+#elif defined(TARGET_POSIX) && !defined(TARGET_DARWIN)
   hwSupport += "VAAPI:no ";
 #endif
 
   CLog::Log(LOGDEBUG, "CDVDFactoryCodec: compiled in hardware support: %s", hwSupport.c_str());
 
-  // dvd's have weird still-frames in it, which is not fully supported in ffmpeg
-  if(hint.stills && (hint.codec == CODEC_ID_MPEG2VIDEO || hint.codec == CODEC_ID_MPEG1VIDEO))
+  if (hint.stills && (hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_MPEG1VIDEO))
   {
-    if( (pCodec = OpenCodec(new CDVDVideoCodecLibMpeg2(), hint, options)) ) return pCodec;
+     // If dvd is an mpeg2 and hint.stills
+     if ( (pCodec = OpenCodec(new CDVDVideoCodecLibMpeg2(), hint, options)) ) return pCodec;
   }
-#if defined(HAVE_LIBVDADECODER)
-  if (!hint.software && g_guiSettings.GetBool("videoplayer.usevda"))
+
+#if defined(HAS_LIBAMCODEC)
+  // amcodec can handle dvd playback.
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.useamcodec"))
   {
-    if (g_sysinfo.HasVDADecoder())
+     if ( (pCodec = OpenCodec(new CDVDVideoCodecAmlogic(), hint, options)) ) return pCodec;
+  }
+#endif
+
+#if defined(TARGET_DARWIN_OSX)
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.usevda"))
+  {
+    if (hint.codec == AV_CODEC_ID_H264 && !hint.ptsinvalid)
     {
-      if (hint.codec == CODEC_ID_H264 && !hint.ptsinvalid)
-      {
-        if ( (pCodec = OpenCodec(new CDVDVideoCodecVDA(), hint, options)) ) return pCodec;
-      }
+      if ( (pCodec = OpenCodec(new CDVDVideoCodecVDA(), hint, options)) ) return pCodec;
     }
   }
 #endif
 
 #if defined(HAVE_VIDEOTOOLBOXDECODER)
-  if (!hint.software && g_guiSettings.GetBool("videoplayer.usevideotoolbox"))
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.usevideotoolbox"))
   {
     if (g_sysinfo.HasVideoToolBoxDecoder())
     {
       switch(hint.codec)
       {
-        case CODEC_ID_H264:
-          if (hint.codec == CODEC_ID_H264 && hint.ptsinvalid)
+        case AV_CODEC_ID_H264:
+          if (hint.codec == AV_CODEC_ID_H264 && hint.ptsinvalid)
             break;
           if ( (pCodec = OpenCodec(new CDVDVideoCodecVideoToolBox(), hint, options)) ) return pCodec;
         break;
@@ -212,19 +236,19 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
 #endif
 
 #if defined(HAVE_LIBCRYSTALHD)
-  if (!hint.software && g_guiSettings.GetBool("videoplayer.usechd"))
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.usechd"))
   {
     if (CCrystalHD::GetInstance()->DevicePresent())
     {
       switch(hint.codec)
       {
-        case CODEC_ID_VC1:
-        case CODEC_ID_WMV3:
-        case CODEC_ID_H264:
-        case CODEC_ID_MPEG2VIDEO:
-          if (hint.codec == CODEC_ID_H264 && hint.ptsinvalid)
+        case AV_CODEC_ID_VC1:
+        case AV_CODEC_ID_WMV3:
+        case AV_CODEC_ID_H264:
+        case AV_CODEC_ID_MPEG2VIDEO:
+          if (hint.codec == AV_CODEC_ID_H264 && hint.ptsinvalid)
             break;
-          if (hint.codec == CODEC_ID_MPEG2VIDEO && hint.width <= 720)
+          if (hint.codec == AV_CODEC_ID_MPEG2VIDEO && hint.width <= 720)
             break;
           if ( (pCodec = OpenCodec(new CDVDVideoCodecCrystalHD(), hint, options)) ) return pCodec;
         break;
@@ -235,18 +259,48 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
   }
 #endif
 
-#if defined(HAVE_LIBOPENMAX)
-  if (g_guiSettings.GetBool("videoplayer.useomx") && !hint.software )
+#if defined(TARGET_ANDROID)
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.usemediacodec"))
   {
-      if (hint.codec == CODEC_ID_H264 || hint.codec == CODEC_ID_MPEG2VIDEO || hint.codec == CODEC_ID_VC1)
+    CLog::Log(LOGINFO, "MediaCodec Video Decoder...");
+    if ( (pCodec = OpenCodec(new CDVDVideoCodecAndroidMediaCodec(), hint, options)) ) return pCodec;
+  }
+#endif
+
+#if defined(HAVE_LIBOPENMAX)
+  if (CSettings::Get().GetBool("videoplayer.useomx") && !hint.software )
+  {
+      if (hint.codec == AV_CODEC_ID_H264 || hint.codec == AV_CODEC_ID_MPEG2VIDEO || hint.codec == AV_CODEC_ID_VC1)
     {
       if ( (pCodec = OpenCodec(new CDVDVideoCodecOpenMax(), hint, options)) ) return pCodec;
     }
   }
 #endif
 
+#if defined(HAS_LIBSTAGEFRIGHT)
+  if (!hint.software && CSettings::Get().GetBool("videoplayer.usestagefright"))
+  {
+    switch(hint.codec)
+    {
+      case CODEC_ID_H264:
+      case CODEC_ID_MPEG4:
+      case CODEC_ID_MPEG2VIDEO:
+      case CODEC_ID_VC1:
+      case CODEC_ID_WMV3:
+      case CODEC_ID_VP3:
+      case CODEC_ID_VP6:
+      case CODEC_ID_VP6F:
+      case CODEC_ID_VP8:
+        if ( (pCodec = OpenCodec(new CDVDVideoCodecStageFright(), hint, options)) ) return pCodec;
+        break;
+      default:
+        break;
+    }
+  }
+#endif
+
   // try to decide if we want to try halfres decoding
-#if !defined(_LINUX) && !defined(_WIN32)
+#if !defined(TARGET_POSIX) && !defined(TARGET_WINDOWS)
   float pixelrate = (float)hint.width*hint.height*hint.fpsrate/hint.fpsscale;
   if( pixelrate > 1400.0f*720.0f*30.0f )
   {
@@ -255,84 +309,21 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, unsigne
   }
 #endif
 
-  CStdString value;
-  value.Format("%d", surfaces);
+  std::string value = StringUtils::Format("%d", surfaces);
   options.m_keys.push_back(CDVDCodecOption("surfaces", value));
   if( (pCodec = OpenCodec(new CDVDVideoCodecFFmpeg(), hint, options)) ) return pCodec;
 
   return NULL;
 }
 
-CDVDAudioCodec* CDVDFactoryCodec::CreateAudioCodec( CDVDStreamInfo &hint, bool passthrough /* = true */)
+CDVDAudioCodec* CDVDFactoryCodec::CreateAudioCodec( CDVDStreamInfo &hint)
 {
   CDVDAudioCodec* pCodec = NULL;
   CDVDCodecOptions options;
 
-  if (passthrough)
-  {
-#if defined(TARGET_DARWIN_OSX) || defined(TARGET_DARWIN_IOS)
-    switch(hint.codec)
-    {
-      case CODEC_ID_AC3:
-      case CODEC_ID_DTS:
-        pCodec = OpenCodec( new CDVDAudioCodecPassthroughFFmpeg(), hint, options );
-        if( pCodec ) return pCodec;
-        break;
-      default:
-        break;      
-    }
-#endif
-    pCodec = OpenCodec( new CDVDAudioCodecPassthrough(), hint, options );
-    if( pCodec ) return pCodec;
-  }
-
-  switch (hint.codec)
-  {
-  case CODEC_ID_MP2:
-  case CODEC_ID_MP3:
-    {
-      pCodec = OpenCodec( new CDVDAudioCodecLibMad(), hint, options );
-      if( pCodec ) return pCodec;
-      break;
-    }
-  case CODEC_ID_PCM_S32LE:
-  case CODEC_ID_PCM_S32BE:
-  case CODEC_ID_PCM_U32LE:
-  case CODEC_ID_PCM_U32BE:
-  case CODEC_ID_PCM_S24LE:
-  case CODEC_ID_PCM_S24BE:
-  case CODEC_ID_PCM_U24LE:
-  case CODEC_ID_PCM_U24BE:
-  case CODEC_ID_PCM_S24DAUD:
-  case CODEC_ID_PCM_S16LE:
-  case CODEC_ID_PCM_S16BE:
-  case CODEC_ID_PCM_U16LE:
-  case CODEC_ID_PCM_U16BE:
-  case CODEC_ID_PCM_S8:
-  case CODEC_ID_PCM_U8:
-  case CODEC_ID_PCM_ALAW:
-  case CODEC_ID_PCM_MULAW:
-    {
-      pCodec = OpenCodec( new CDVDAudioCodecPcm(), hint, options );
-      if( pCodec ) return pCodec;
-      break;
-    }
-#if 0
-  //case CODEC_ID_LPCM_S16BE:
-  //case CODEC_ID_LPCM_S20BE:
-  case CODEC_ID_LPCM_S24BE:
-    {
-      pCodec = OpenCodec( new CDVDAudioCodecLPcm(), hint, options );
-      if( pCodec ) return pCodec;
-      break;
-    }
-#endif
-  default:
-    {
-      pCodec = NULL;
-      break;
-    }
-  }
+  // try passthrough first
+  pCodec = OpenCodec( new CDVDAudioCodecPassthrough(), hint, options );
+  if( pCodec ) return pCodec;
 
   pCodec = OpenCodec( new CDVDAudioCodecFFmpeg(), hint, options );
   if( pCodec ) return pCodec;
@@ -347,18 +338,13 @@ CDVDOverlayCodec* CDVDFactoryCodec::CreateOverlayCodec( CDVDStreamInfo &hint )
 
   switch (hint.codec)
   {
-    case CODEC_ID_TEXT:
-#if defined(LIBAVCODEC_FROM_FFMPEG) && LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(54,53,100)
-    // API changed in:
-    // ffmpeg: commit 2626cc4580bfd560c6983338d77b2c11c16af94f (11 Aug 2012)
-    //         release 1.0 (28 Sept 2012)
+    case AV_CODEC_ID_TEXT:
     case AV_CODEC_ID_SUBRIP:
-#endif
       pCodec = OpenCodec(new CDVDOverlayCodecText(), hint, options);
       if( pCodec ) return pCodec;
       break;
 
-    case CODEC_ID_SSA:
+    case AV_CODEC_ID_SSA:
       pCodec = OpenCodec(new CDVDOverlayCodecSSA(), hint, options);
       if( pCodec ) return pCodec;
 
@@ -366,7 +352,7 @@ CDVDOverlayCodec* CDVDFactoryCodec::CreateOverlayCodec( CDVDStreamInfo &hint )
       if( pCodec ) return pCodec;
       break;
 
-    case CODEC_ID_MOV_TEXT:
+    case AV_CODEC_ID_MOV_TEXT:
       pCodec = OpenCodec(new CDVDOverlayCodecTX3G(), hint, options);
       if( pCodec ) return pCodec;
       break;

@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -20,8 +20,9 @@
 
 #include "MouseStat.h"
 #include "guilib/Key.h"
-#include "windowing/WindowingFactory.h"
+#include "settings/lib/Setting.h"
 #include "utils/TimeUtils.h"
+#include "windowing/WindowingFactory.h"
 
 CMouseStat::CMouseStat()
 {
@@ -35,6 +36,16 @@ CMouseStat::CMouseStat()
 
 CMouseStat::~CMouseStat()
 {
+}
+
+void CMouseStat::OnSettingChanged(const CSetting *setting)
+{
+  if (setting == NULL)
+    return;
+
+  const std::string &settingId = setting->GetId();
+  if (settingId == "input.enablemouse")
+    SetEnabled(((CSettingBool*)setting)->GetValue());
 }
 
 void CMouseStat::Initialize()
@@ -149,8 +160,8 @@ void CMouseStat::HandleEvent(XBMC_Event& newEvent)
   else if (m_mouseState.dz < 0)
     m_Action = ACTION_MOUSE_WHEEL_DOWN;
 
-  // Finally check for a mouse move (that isn't a drag)
-  else if (newEvent.type == XBMC_MOUSEMOTION)
+  // Check for a mouse move that isn't a drag, ignoring messages with no movement at all
+  else if (newEvent.type == XBMC_MOUSEMOTION && (m_mouseState.dx || m_mouseState.dy))
     m_Action = ACTION_MOUSE_MOVE;
 
   // ignore any other mouse messages

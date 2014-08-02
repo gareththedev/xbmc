@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,10 +18,10 @@
  *
  */
 
-#if (defined HAVE_CONFIG_H) && (!defined WIN32)
+#if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
   #include "config.h"
 #endif
-#ifdef _WIN32
+#ifdef TARGET_WINDOWS
 #include "system.h" // just for HAS_LIBRTMP
 #endif
 
@@ -73,12 +73,15 @@ CDVDInputStreamRTMP::CDVDInputStreamRTMP() : CDVDInputStream(DVDSTREAM_TYPE_RTMP
     m_libRTMP.LogSetCallback(CDVDInputStreamRTMP_Log);
     switch (g_advancedSettings.m_logLevel)
     {
-      case LOG_LEVEL_DEBUG_SAMBA: level = RTMP_LOGDEBUG2; break;
       case LOG_LEVEL_DEBUG_FREEMEM:
       case LOG_LEVEL_DEBUG: level = RTMP_LOGDEBUG; break;
       case LOG_LEVEL_NORMAL: level = RTMP_LOGINFO; break;
       default: level = RTMP_LOGCRIT; break;
     }
+
+    if (g_advancedSettings.CanLogComponent(LOGRTMP))
+      level = RTMP_LOGDEBUG2;
+
     m_libRTMP.LogSetLevel(level);
     RTMP_level = level;
     
@@ -101,7 +104,8 @@ CDVDInputStreamRTMP::~CDVDInputStreamRTMP()
   m_sStreamPlaying = NULL;
 
   Close();
-  m_libRTMP.Free(m_rtmp);
+  if (m_rtmp)
+    m_libRTMP.Free(m_rtmp);
   m_rtmp = NULL;
   m_bPaused = false;
 }
@@ -136,7 +140,7 @@ bool CDVDInputStreamRTMP::Open(const char* strFile, const std::string& content)
     m_sStreamPlaying = NULL;
   }
 
-  if (!CDVDInputStream::Open(strFile, "video/x-flv"))
+  if (!m_rtmp || !CDVDInputStream::Open(strFile, "video/x-flv"))
     return false;
 
   CSingleLock lock(m_RTMPSection);
@@ -154,7 +158,7 @@ bool CDVDInputStreamRTMP::Open(const char* strFile, const std::string& content)
   m_optionvalues.clear();
   for (int i=0; options[i].name; i++)
   {
-    CStdString tmp = m_item.GetProperty(options[i].name).asString();
+    std::string tmp = m_item.GetProperty(options[i].name).asString();
     if (!tmp.empty())
     {
       m_optionvalues.push_back(tmp);
@@ -178,15 +182,19 @@ void CDVDInputStreamRTMP::Close()
   CSingleLock lock(m_RTMPSection);
   CDVDInputStream::Close();
 
-  m_libRTMP.Close(m_rtmp);
+  if (m_rtmp)
+    m_libRTMP.Close(m_rtmp);
 
   m_optionvalues.clear();
   m_eof = true;
   m_bPaused = false;
 }
 
-int CDVDInputStreamRTMP::Read(BYTE* buf, int buf_size)
+int CDVDInputStreamRTMP::Read(uint8_t* buf, int buf_size)
 {
+  if (!m_rtmp)
+    return -1;
+
   int i = m_libRTMP.Read(m_rtmp, (char *)buf, buf_size);
   if (i < 0)
     m_eof = true;
@@ -207,7 +215,7 @@ bool CDVDInputStreamRTMP::SeekTime(int iTimeInMsec)
   CLog::Log(LOGNOTICE, "RTMP Seek to %i requested", iTimeInMsec);
   CSingleLock lock(m_RTMPSection);
 
-  if (m_libRTMP.SendSeek(m_rtmp, iTimeInMsec))
+  if (m_rtmp && m_libRTMP.SendSeek(m_rtmp, iTimeInMsec))
     return true;
 
   return false;
@@ -223,7 +231,11 @@ bool CDVDInputStreamRTMP::Pause(double dTime)
   CSingleLock lock(m_RTMPSection);
 
   m_bPaused = !m_bPaused;
-  m_libRTMP.Pause(m_rtmp, m_bPaused);
+
+  CLog::Log(LOGNOTICE, "RTMP Pause %s requested", m_bPaused ? "TRUE" : "FALSE");
+
+  if (m_rtmp)
+    m_libRTMP.Pause(m_rtmp, m_bPaused);
 
   return true;
 }

@@ -1,6 +1,6 @@
 /*
  *      Copyright (C) 2011-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -39,7 +39,7 @@ PCMCodec::~PCMCodec()
   DeInit();
 }
 
-bool PCMCodec::Init(const CStdString &strFile, unsigned int filecache)
+bool PCMCodec::Init(const std::string &strFile, unsigned int filecache)
 {
   m_file.Close();
   if (!m_file.Open(strFile, READ_CACHED))
@@ -95,28 +95,27 @@ bool PCMCodec::CanInit()
   return true;
 }
 
-void PCMCodec::SetMimeParams(const CStdString& strMimeParams)
+void PCMCodec::SetMimeParams(const std::string& strMimeParams)
 {
-  CStdStringArray mimeParams;
-
   // if there are no parameters, the default is 2 channels, 44100 samples/sec
   m_Channels = 2;
   m_SampleRate = 44100;
 
-  StringUtils::SplitString(strMimeParams, ";", mimeParams);
-  for (size_t i = 0; i < mimeParams.size(); i++)
+  std::vector<std::string> mimeParams = StringUtils::Split(strMimeParams, ";");
+  for (std::vector<std::string>::const_iterator i = mimeParams.begin(); i != mimeParams.end(); ++i)
   {
-    CStdStringArray thisParam;
-    StringUtils::SplitString(mimeParams[i], "=", thisParam, 2);
+    std::vector<std::string> thisParam = StringUtils::Split(*i, "=", 2);
     if (thisParam.size() > 1)
     {
       if (thisParam[0] == "rate")
       {
-        m_SampleRate = atoi(thisParam[1].Trim());
+        StringUtils::Trim(thisParam[1]);
+        m_SampleRate = atoi(thisParam[1].c_str());
       }
       else if (thisParam[0] == "channels")
       {
-        m_Channels = atoi(thisParam[1].Trim());
+        StringUtils::Trim(thisParam[1]);
+        m_Channels = atoi(thisParam[1].c_str());
       }
     }
   }

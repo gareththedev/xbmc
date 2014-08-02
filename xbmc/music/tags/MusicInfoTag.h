@@ -1,8 +1,7 @@
 #pragma once
-
 /*
  *      Copyright (C) 2005-2013 Team XBMC
- *      http://www.xbmc.org
+ *      http://xbmc.org
  *
  *  This Program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,9 +27,10 @@ class CArtist;
 #include <string>
 #include <stdint.h>
 
-#include "utils/Archive.h"
+#include "utils/IArchivable.h"
 #include "utils/ISerializable.h"
 #include "utils/ISortable.h"
+#include "utils/StdString.h"
 #include "XBDateTime.h"
 
 #define REPLAY_GAIN_HAS_TRACK_INFO 1
@@ -38,9 +38,16 @@ class CArtist;
 #define REPLAY_GAIN_HAS_TRACK_PEAK 4
 #define REPLAY_GAIN_HAS_ALBUM_PEAK 8
 
+enum ReplayGain
+{
+  REPLAY_GAIN_NONE  = 0,
+  REPLAY_GAIN_ALBUM,
+  REPLAY_GAIN_TRACK
+};
+
 namespace MUSIC_INFO
 {
-  class EmbeddedArtInfo
+  class EmbeddedArtInfo : public IArchivable
   {
   public:
     EmbeddedArtInfo() {};
@@ -49,6 +56,7 @@ namespace MUSIC_INFO
     void clear();
     bool empty() const;
     bool matches(const EmbeddedArtInfo &right) const;
+    virtual void Archive(CArchive& ar);
     size_t      size;
     std::string mime;
   };
@@ -89,9 +97,9 @@ public:
   void GetReleaseDate(SYSTEMTIME& dateTime) const;
   CStdString GetYearString() const;
   const CStdString& GetMusicBrainzTrackID() const;
-  const CStdString& GetMusicBrainzArtistID() const;
+  const std::vector<std::string>& GetMusicBrainzArtistID() const;
   const CStdString& GetMusicBrainzAlbumID() const;
-  const CStdString& GetMusicBrainzAlbumArtistID() const;
+  const std::vector<std::string>& GetMusicBrainzAlbumArtistID() const;
   const CStdString& GetMusicBrainzTRMID() const;
   const CStdString& GetComment() const;
   const CStdString& GetLyrics() const;
@@ -129,9 +137,9 @@ public:
   void SetAlbum(const CAlbum& album);
   void SetSong(const CSong& song);
   void SetMusicBrainzTrackID(const CStdString& strTrackID);
-  void SetMusicBrainzArtistID(const CStdString& strArtistID);
+  void SetMusicBrainzArtistID(const std::vector<std::string>& musicBrainzArtistId);
   void SetMusicBrainzAlbumID(const CStdString& strAlbumID);
-  void SetMusicBrainzAlbumArtistID(const CStdString& strAlbumArtistID);
+  void SetMusicBrainzAlbumArtistID(const std::vector<std::string>& musicBrainzAlbumArtistId);
   void SetMusicBrainzTRMID(const CStdString& strTRMID);
   void SetComment(const CStdString& comment);
   void SetLyrics(const CStdString& lyrics);
@@ -167,7 +175,7 @@ public:
 
   virtual void Archive(CArchive& ar);
   virtual void Serialize(CVariant& ar) const;
-  virtual void ToSortable(SortItem& sortable);
+  virtual void ToSortable(SortItem& sortable, Field field) const;
 
   void Clear();
 protected:
@@ -184,9 +192,9 @@ protected:
   std::vector<std::string> m_albumArtist;
   std::vector<std::string> m_genre;
   CStdString m_strMusicBrainzTrackID;
-  CStdString m_strMusicBrainzArtistID;
+  std::vector<std::string> m_musicBrainzArtistID;
   CStdString m_strMusicBrainzAlbumID;
-  CStdString m_strMusicBrainzAlbumArtistID;
+  std::vector<std::string> m_musicBrainzAlbumArtistID;
   CStdString m_strMusicBrainzTRMID;
   CStdString m_strComment;
   CStdString m_strLyrics;
@@ -195,7 +203,7 @@ protected:
   int m_iDuration;
   int m_iTrack;     // consists of the disk number in the high 16 bits, the track number in the low 16bits
   int m_iDbId;
-  std::string m_type; ///< item type "song", "album", "artist"
+  MediaType m_type; ///< item type "song", "album", "artist"
   bool m_bLoaded;
   char m_rating;
   int m_listeners;

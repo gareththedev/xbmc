@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!-- This file contains the mapping of keys (gamepad, remote, and keyboard) to actions within XBMC -->
 <!-- The <global> section is a fall through - they will only be used if the button is not          -->
 <!-- used in the current window's section.  Note that there is only handling                       -->
@@ -58,7 +59,8 @@
       <skipminus>SkipPrevious</skipminus>
       <display>FullScreen</display>
       <start>PreviousMenu</start>
-      <record>Screenshot</record>
+      <record>Record</record>
+      <eject>XBMC.EjectTray()</eject>
       <volumeplus>VolumeUp</volumeplus>
       <volumeminus>VolumeDown</volumeminus>
       <mute>Mute</mute>
@@ -66,13 +68,13 @@
       <myvideo>XBMC.ActivateWindow(MyVideos)</myvideo>
       <mymusic>XBMC.ActivateWindow(MyMusic)</mymusic>
       <mypictures>XBMC.ActivateWindow(MyPictures)</mypictures>
-      <mytv>XBMC.ActivateWindow(MyPVR)</mytv>
-      <guide>XBMC.ActivateWindowAndFocus(MyPVR, 31,0, 10,0)</guide>
-      <livetv>XBMC.ActivateWindowAndFocus(MyPVR, 32,0, 11,0)</livetv>
-      <liveradio>XBMC.ActivateWindowAndFocus(MyPVR, 33,0, 12,0)</liveradio>
-      <recordedtv>XBMC.ActivateWindowAndFocus(MyPVR, 34,0, 13,0)</recordedtv>
-      <epgsearch>XBMC.ActivateWindowAndFocus(MyPVR, 35,0, 14,0)</epgsearch>
-      <red>XBMC.ActivateWindow(MyPVR)</red>
+      <mytv>XBMC.ActivateWindow(TVChannels)</mytv>
+      <guide>XBMC.ActivateWindow(TVGuide)</guide>
+      <livetv>XBMC.ActivateWindow(TVChannels)</livetv>
+      <liveradio>XBMC.ActivateWindow(RadioChannels)</liveradio>
+      <recordedtv>XBMC.ActivateWindow(TVRecordings)</recordedtv>
+      <epgsearch>XBMC.ActivateWindow(TVSearch)</epgsearch>
+      <red>XBMC.ActivateWindow(TVChannels)</red>
       <green>XBMC.ActivateWindow(MyVideos)</green>
       <yellow>XBMC.ActivateWindow(MyMusic)</yellow>
       <blue>XBMC.ActivateWindow(MyPictures)</blue>
@@ -95,11 +97,42 @@
       <hash>XBMC.ActivateWindow(Settings)</hash>
     </remote>
   </Home>
-  <MyTV>
+  <MyTVRecordings>
     <remote>
       <clear>Delete</clear>
+      <red>Red</red>
+      <green>Green</green>
+      <yellow>Yellow</yellow>
+      <blue>Blue</blue>
     </remote>
-  </MyTV>
+  </MyTVRecordings>
+  <MyTVTimers>
+    <remote>
+      <clear>Delete</clear>
+      <red>Red</red>
+      <green>Green</green>
+      <yellow>Yellow</yellow>
+      <blue>Blue</blue>
+    </remote>
+  </MyTVTimers>
+  <MyRadioRecordings>
+    <remote>
+      <clear>Delete</clear>
+      <red>Red</red>
+      <green>Green</green>
+      <yellow>Yellow</yellow>
+      <blue>Blue</blue>
+    </remote>
+  </MyRadioRecordings>
+  <MyRadioTimers>
+    <remote>
+      <clear>Delete</clear>
+      <red>Red</red>
+      <green>Green</green>
+      <yellow>Yellow</yellow>
+      <blue>Blue</blue>
+    </remote>
+  </MyRadioTimers>
   <MyFiles>
     <remote>
       <clear>Delete</clear>
@@ -145,9 +178,9 @@
       <nine>Number9</nine>
       <left>StepBack</left>
       <right>StepForward</right>
-      <up>BigStepForward</up>
-      <down>BigStepBack</down>
-      <back>SmallStepBack</back>
+      <up>ChapterOrBigStepForward</up>
+      <down>ChapterOrBigStepBack</down>
+      <back>Back</back>
       <menu>OSD</menu>
       <start>OSD</start>
       <select>OSD</select>
@@ -188,7 +221,7 @@
       <right>NextPreset</right>
       <up>IncreaseRating</up>
       <down>DecreaseRating</down>
-      <back>LockPreset</back>
+      <back>Back</back>
       <title>CodecInfo</title>
       <select>XBMC.ActivateWindow(VisualisationPresetList)</select>
       <menu>OSD</menu>
@@ -362,14 +395,6 @@
       <back>PreviousMenu</back>
     </remote>
   </Weather>
-  <TV>
-    <remote>
-      <red>Red</red>
-      <green>Green</green>
-      <yellow>Yellow</yellow>
-      <blue>Blue</blue>
-    </remote>
-  </TV>
   <Settings>
     <remote>
       <back>PreviousMenu</back>
@@ -510,8 +535,8 @@
   </Favourites>
   <FullscreenLiveTV>
     <remote>
-      <left>PreviousChannelGroup</left>
-      <right>NextChannelGroup</right>
+      <left>StepBack</left>
+      <right>StepForward</right>
       <up>ChannelUp</up>
       <down>ChannelDown</down>
     </remote>
@@ -554,4 +579,12 @@
       <clear>Delete</clear>
     </remote>
   </AddonSettings>
+  <Addon>
+    <remote>
+      <red>Red</red>
+      <green>Green</green>
+      <yellow>Yellow</yellow>
+      <blue>Blue</blue>
+    </remote>
+  </Addon>
 </keymap>
